@@ -1,1 +1,32 @@
-﻿
+﻿Mail folders
+– GET /users/{id}/mailFolders/delta
+
+Messages in a folder
+– GET /users/{id}/mailFolders/{folder-id}/messages/delta
+
+Contact folders
+– GET /users/{id}/contactFolders/delta
+
+Contacts in a folder
+– GET /users/{id}/contactFolders/{folder-id}/contacts/delta
+
+All events
+– GET /users/{id}/events/delta
+
+Default calendar events
+– GET /users/{id}/calendar/events/delta
+
+CalendarView (range of events)
+– GET /users/{id}/calendarView/delta?startDateTime=…&endDateTime=…
+
+Specific calendar’s events
+– GET /users/{id}/calendars/{calendar-id}/events/delta
+
+OneDrive (drive root)
+– GET /users/{id}/drive/root/delta
+
+To-Do lists and tasks
+
+GET /users/{id}/todo/lists/delta
+
+GET /users/{id}/todo/lists/{list-id}/tasks/delta

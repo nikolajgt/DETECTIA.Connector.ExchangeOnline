@@ -1,8 +1,11 @@
 ﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 using DETECTIA.Connector.ExchangeOnline.Migration;
+using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
+using Microsoft.Graph.Models;
+using User = DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 
@@ -14,34 +17,26 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            var state = await dbContext.SyncStates
-                .SingleOrDefaultAsync(s => s.Key == "UsersDelta", cancellationToken);
-            if (state == null)
+            var state = await dbContext.SyncStates.SingleOrDefaultAsync(s => s.Key == "UsersDelta", cancellationToken);
+            var isNew = state == null;
+            if (isNew)
             {
-                state = new ExchangeUsersSyncState { Key = "UsersDelta" };
-                dbContext.SyncStates.Add(state);
+                state = new ExchangeSyncState { Key = "UsersDelta" };
+                var entityResponse = await dbContext.SyncStates.AddAsync(state, cancellationToken);
+                state = entityResponse.Entity;
             }
 
             var baseBuilder = graph.Users.Delta;
             var builder = string.IsNullOrEmpty(state.DeltaLink)
                 ? baseBuilder
                 : baseBuilder.WithUrl(state.DeltaLink);
-
-            var existingUsers = await dbContext.Users
-                .Where(u => u.AccountEnabled)
-                    .Include(x => x.MailboxFolders)
-                    .Include(x => x.UserMailboxSettings)
-                .ToListAsync(cancellationToken);
             
-            var byId = existingUsers
-                .ToDictionary(u => u.Id, StringComparer.OrdinalIgnoreCase);
-
+            var users = new List<User>();
             string? nextLink = null, newDelta = null;
             do
             {
                 var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
                 {
-                    //cfg.QueryParameters.Filter = "mail ne null";
                     cfg.QueryParameters.Select = new[]
                     {
                         "id",
@@ -70,55 +65,41 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
 
                 foreach (var u in resp.Value)
                 {
-                    // 5a) Deleted?
                     if (u.AdditionalData?.ContainsKey("@removed") == true)
                     {
-                        if (byId.TryGetValue(u.Id!, out var toRemove))
-                        {
-                            toRemove.AccountEnabled = false;
-                            dbContext.Users.Update(toRemove);
-                            byId.Remove(u.Id!);
-                        }
+                        var user = await dbContext.Users.SingleOrDefaultAsync(x => x.ExchangeUserId == u.Id, cancellationToken);
+                        if (user is null) continue;
+                        user.AccountEnabled = false;
+                        dbContext.Users.Update(user);
                     }
                     else
                     {
-                        var existingUser = existingUsers?.SingleOrDefault(x => x.Id == u.Id);
-                        var mapped = new ExchangeUser
+                        users.Add(new User
                         {
-                            Id                        = u.Id!,
-                            AccountEnabled            = u.AccountEnabled ?? false,
-                            DisplayName               = u.DisplayName!,
-                            GivenName                 = u.GivenName!,
-                            Surname                   = u.Surname!,
-                            Mail                      = u.Mail!,
-                            UserPrincipalName         = u.UserPrincipalName!,
-                            MailNickname              = u.MailNickname!,
-                            JobTitle                  = u.JobTitle!,
-                            Department                = u.Department!,
-                            OfficeLocation            = u.OfficeLocation!,
-                            MobilePhone               = u.MobilePhone!,
-                            BusinessPhones            = u.BusinessPhones?.ToList() ?? [],
-                            OtherMails                = u.OtherMails?.ToList()     ?? [],
-                            OnPremisesImmutableId     = u.OnPremisesImmutableId ?? string.Empty,
-                            UsageLocation             = u.UsageLocation!,
-                            PreferredLanguage         = u.PreferredLanguage!,
-                            UserType                  = u.UserType!,
-                            CreatedDateTime           = u.CreatedDateTime,
-                            LastPasswordChangeDateTime= u.LastPasswordChangeDateTime,
-                            UserMailboxSettings       = existingUser?.UserMailboxSettings ?? new(),
-                            MailboxFolders            = existingUser?.MailboxFolders      ?? [],
-                            FoldersDeltaLink          = existingUser?.FoldersDeltaLink,
-                        };
-
-                        if (byId.TryGetValue(u.Id!, out var existing))
-                        {
-                            dbContext.Entry(existing).CurrentValues.SetValues(mapped);
-                        }
-                        else
-                        {
-                            await dbContext.Users.AddAsync(mapped, cancellationToken);
-                            byId[u.Id!] = mapped;
-                        }
+                            ExchangeUserId = u.Id!,
+                            AccountEnabled = u.AccountEnabled ?? false,
+                            DisplayName = u.DisplayName!,
+                            GivenName = u.GivenName!,
+                            Surname = u.Surname!,
+                            Mail = u.Mail!,
+                            UserPrincipalName = u.UserPrincipalName!,
+                            MailNickname = u.MailNickname!,
+                            JobTitle = u.JobTitle!,
+                            Department = u.Department!,
+                            OfficeLocation = u.OfficeLocation!,
+                            MobilePhone = u.MobilePhone!,
+                            BusinessPhones = u.BusinessPhones?.ToList() ?? [],
+                            OtherMails = u.OtherMails?.ToList() ?? [],
+                            OnPremisesImmutableId = u.OnPremisesImmutableId ?? string.Empty,
+                            UsageLocation = u.UsageLocation!,
+                            PreferredLanguage = u.PreferredLanguage!,
+                            UserType = u.UserType!,
+                            CreatedDateTime = u.CreatedDateTime,
+                            LastPasswordChangeDateTime = u.LastPasswordChangeDateTime,
+                            UserMailboxSettings = null, // these get fetched elsewhere
+                            MailboxFolders = null, // these get fetched elsewhere
+                            FoldersDeltaLink = null, // these get fetched elsewhere
+                        });
                     }
                 }
 
@@ -131,8 +112,16 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
 
             state.DeltaLink   = newDelta;
             state.LastSyncUtc = DateTimeOffset.UtcNow;
-            // dbContext.SyncStates.Update(state);
-
+            
+            await dbContext.BulkInsertOrUpdateAsync(users, new BulkConfig
+            {
+                UpdateByProperties = ["Id"],
+                PropertiesToExcludeOnUpdate = ["Id", "CreatedDateTime"],
+                SetOutputIdentity = false,
+                PreserveInsertOrder = false,
+                BatchSize = 500
+            }, cancellationToken: cancellationToken);
+            
             await dbContext.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
         }
@@ -144,108 +133,178 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         }
     }
 
+ 
+    public async Task SyncUsersMailboxSettingsAsync(CancellationToken cancellationToken)
+    {
+        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var users = await dbContext.Users.ToListAsync(cancellationToken);
+        
+        var mailboxSetting = new List<UserMailboxSettings>();
+        foreach (var u in users)
+        {
+            try
+            {
+                var graphSettings = await graph
+                    .Users[u.UserPrincipalName]
+                    .MailboxSettings
+                    .GetAsync(cfg =>
+                    {
+                        // pick only the fields you need
+                        cfg.QueryParameters.Select = new[]
+                        {
+                            "archiveFolder",
+                            "automaticRepliesSetting",
+                            "dateFormat",
+                            "timeFormat",
+                            "timeZone",
+                            "workingHours",
+                            "delegateMeetingMessageDeliveryOptions"
+                        };
+                    }, cancellationToken);
+
+                var mapped = new UserMailboxSettings
+                {
+                    ExchangeUserId = u.Id,
+                    ArchiveFolder = graphSettings?.ArchiveFolder,
+                    AutomaticRepliesEnabled =
+                        graphSettings?.AutomaticRepliesSetting?.Status != AutomaticRepliesStatus.Disabled,
+                    AutomaticRepliesInternalMessage = graphSettings?.AutomaticRepliesSetting?.InternalReplyMessage,
+                    AutomaticRepliesExternalMessage = graphSettings?.AutomaticRepliesSetting?.ExternalReplyMessage,
+                    DateFormat = graphSettings?.DateFormat,
+                    TimeFormat = graphSettings?.TimeFormat,
+                    TimeZone = graphSettings?.TimeZone,
+                    // WorkingDays = graphSettings?.WorkingHours?.DaysOfWeek?
+                    //     .Select(d => d?.ToString() ?? string.Empty)
+                    //     .ToList(),
+                    // WorkingHoursStartTime = graphSettings?.WorkingHours?.StartTime.Value.DateTime.TimeOfDay,
+                    // WorkingHoursEndTime = graphSettings?.WorkingHours?.EndTime.Value.DateTime.TimeOfDay,
+                    DelegateMeetingMessageDeliveryOptions = graphSettings?.DelegateMeetingMessageDeliveryOptions?.ToString()
+                };
+                mailboxSetting.Add(mapped);
+            }
+            catch (Microsoft.Graph.Models.ODataErrors.ODataError ex)
+            {
+                // You can inspect ex.Error.Message or ex.Message here
+                if (!ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase)
+                    && !ex.Message.Contains("soft-deleted", StringComparison.OrdinalIgnoreCase)
+                    && !ex.Message.Contains("on-premise", StringComparison.OrdinalIgnoreCase)) throw;
+                
+                logger.LogWarning(
+                    "Skipping mailboxSettings for {Upn}: {Error}",
+                    u.UserPrincipalName,
+                    ex.Message);
+                continue;
+            }
+        }
+        
+        await dbContext.BulkInsertOrUpdateAsync(mailboxSetting, new BulkConfig
+        {
+            UpdateByProperties = ["ExchangeUserId"],
+            PropertiesToExcludeOnUpdate = ["ExchangeUserId"],
+            SetOutputIdentity = false,
+            PreserveInsertOrder = false,
+            BatchSize = 500
+        }, cancellationToken: cancellationToken);
+    }
+
     
 
-    public async Task SyncUserFolderAsync(ExchangeUser user, CancellationToken cancellationToken)
+    public async Task SyncUsersFoldersAsync(CancellationToken cancellationToken)
     {
-        var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
-        var baseBuilder = graph.Users[user.UserPrincipalName].MailFolders.Delta;
-        var builder = string.IsNullOrEmpty(user.FoldersDeltaLink)
-            ? baseBuilder
-            : baseBuilder.WithUrl(user.FoldersDeltaLink);
-        
-        var byId = user.MailboxFolders.ToDictionary(f => f.Id, StringComparer.OrdinalIgnoreCase);
-        List<ExchangeMailFolder> folders = new();
-        string? nextLink = null;
-        string? deltaLink = null;
-        await using var tx = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-
         try
         {
-            do
+            await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
+            var users = await dbContext.Users.ToListAsync(cancellationToken);
+        
+            var usersFolders = new List<UserMailFolder>();
+            foreach (var user in users)
             {
-                var resp = await builder.GetAsDeltaGetResponseAsync(requestConfig =>
+                try
                 {
-                    requestConfig.QueryParameters.Select =
-                    [
-                        "id",
-                        "displayName",
-                        "parentFolderId",
-                        "childFolderCount",
-                        "totalItemCount",
-                        "unreadItemCount",
-                        "lastModifiedDateTime"
-                    ];
-                    requestConfig.QueryParameters.Top = 100;
-                }, cancellationToken);
-                if(resp is null) continue;
-
-                if (resp.Value is not null && resp.Value.Count > 0)
-                {
-                    foreach (var f in resp.Value)
+                    var baseBuilder = graph.Users[user.UserPrincipalName].MailFolders.Delta;
+                    var builder = string.IsNullOrEmpty(user.FoldersDeltaLink)
+                        ? baseBuilder
+                        : baseBuilder.WithUrl(user.FoldersDeltaLink);
+                    
+                    string? nextLink = null;
+                    string? deltaLink = null;
+                    do
                     {
-                        // Either remove record or set a property to delete
-                        if (f.AdditionalData.TryGetValue("@removed", out _))
+                        var resp = await builder.GetAsDeltaGetResponseAsync(requestConfig =>
                         {
-                            if (byId.TryGetValue(f.Id!, out var toRemove))
+                            requestConfig.QueryParameters.Select =
+                            [
+                                "id",
+                                "displayName",
+                                "parentFolderId",
+                                "childFolderCount",
+                                "totalItemCount",
+                                "unreadItemCount"
+                            ];
+                        }, cancellationToken);
+                        if(resp is null) continue;
+
+                        if (resp.Value is not null && resp.Value.Count > 0)
+                        {
+                            foreach (var f in resp.Value)
                             {
-                                dbContext.MailFolders.Remove(toRemove);
-                                byId.Remove(f.Id!);
+                                if (f.AdditionalData.TryGetValue("@removed", out _))
+                                {
+                                }
+                                else
+                                {
+                                    var mapped = new UserMailFolder
+                                    {
+                                        DisplayName          = f.DisplayName!,
+                                        ParentFolderId       = f.ParentFolderId,
+                                        ChildFolderCount     = f.ChildFolderCount ?? 0,
+                                        TotalItemCount       = f.TotalItemCount ?? 0,
+                                        UnreadItemCount      = f.UnreadItemCount ?? 0,
+                                        LastModifiedDateTime = DateTimeOffset.UtcNow,
+                                        ExchangeUserId       = user.Id,
+                                        User                 = user
+                                    };
+
+                                    usersFolders.Add(mapped);
+                                }
                             }
                         }
-                        else
-                        {
-                            // b) Map to your domain type
-                            var mapped = new ExchangeMailFolder
-                            {
-                                Id                   = f.Id!,
-                                DisplayName          = f.DisplayName!,
-                                ParentFolderId       = f.ParentFolderId,
-                                ChildFolderCount     = f.ChildFolderCount ?? 0,
-                                TotalItemCount       = f.TotalItemCount ?? 0,
-                                UnreadItemCount      = f.UnreadItemCount ?? 0,
-                                LastModifiedDateTime = DateTimeOffset.UtcNow,
-                                User                 = user
-                            };
 
-                            if (byId.TryGetValue(f.Id!, out var existing))
-                            {
-                                // update existing
-                                existing.DisplayName          = mapped.DisplayName;
-                                existing.ParentFolderId       = mapped.ParentFolderId;
-                                existing.ChildFolderCount     = mapped.ChildFolderCount;
-                                existing.TotalItemCount       = mapped.TotalItemCount;
-                                existing.UnreadItemCount      = mapped.UnreadItemCount;
-                                existing.LastModifiedDateTime = mapped.LastModifiedDateTime;
+                        nextLink  = resp.OdataNextLink;
+                        deltaLink = resp.OdataDeltaLink;
 
-                                dbContext.MailFolders.Update(existing);
-                            }
-                            else
-                            {
-                                await dbContext.MailFolders.AddAsync(mapped, cancellationToken);
-                                byId[f.Id!] = mapped;
-                            }
-                        }
+                        if (nextLink != null)
+                            builder = builder.WithUrl(nextLink);
                     }
+                    while (nextLink != null);
+                    user.FoldersDeltaLink = deltaLink;
                 }
-
-                nextLink  = resp.OdataNextLink;
-                deltaLink = resp.OdataDeltaLink;
-
-                if (nextLink != null)
-                    builder = builder.WithUrl(nextLink);
+                catch (Microsoft.Graph.Models.ODataErrors.ODataError ex)
+                {
+                    if (!ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase)
+                        && !ex.Message.Contains("soft-deleted", StringComparison.OrdinalIgnoreCase)
+                        && !ex.Message.Contains("on-premise", StringComparison.OrdinalIgnoreCase)) throw;
+                    
+                    logger.LogWarning(
+                        "Skipping mailboxSettings for {Upn}: {Error}",
+                        user.UserPrincipalName,
+                        ex.Message);
+                    continue;
+                }
             }
-            while (nextLink != null);
-            
-            user.FoldersDeltaLink = deltaLink;
-            dbContext.Users.Update(user);
+            await dbContext.BulkInsertOrUpdateAsync(usersFolders, new BulkConfig
+            {
+                UpdateByProperties = ["ExchangeUserId"],
+                PropertiesToExcludeOnUpdate = ["ExchangeUserId"],
+                SetOutputIdentity = false,
+                PreserveInsertOrder = false,
+                BatchSize = 500
+            }, cancellationToken: cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
         }
         catch (Exception e)
         {
             logger.LogError(e, e.Message);
-            await tx.RollbackAsync(cancellationToken);
             throw;
         }
     }

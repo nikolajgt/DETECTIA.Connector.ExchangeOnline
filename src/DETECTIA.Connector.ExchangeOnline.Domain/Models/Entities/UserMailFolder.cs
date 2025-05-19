@@ -1,9 +1,12 @@
-﻿namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+﻿using System.ComponentModel.DataAnnotations;
 
-public record ExchangeMailFolder : IEntityTracker
+namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+
+public record UserMailFolder : IEntityTracker
 {
     /// <summary>Graph‐assigned folder ID (GUID).</summary>
-    public required string Id                     { get; init; }
+    [Key]
+    public long Id                     { get; init; }
 
     /// <summary>Human‐readable name (Inbox, Sent Items, etc.).</summary>
     public required string DisplayName            { get; set; }
@@ -19,7 +22,9 @@ public record ExchangeMailFolder : IEntityTracker
 
     /// <summary>Unread items in this folder.</summary>
     public required int UnreadItemCount           { get; set; }
-    public required ExchangeUser User             { get; init; }
+    
+    public required long ExchangeUserId         { get; init; }
+    public required User User             { get; init; }
 
     /// <summary>
     /// When this folder was last modified (e.g. renamed, moved).

@@ -5,15 +5,31 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration;
 
 public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : DbContext(options)
 {
-    public DbSet<ExchangeUser> Users { get; init; }  
-    public DbSet<ExchangeMailFolder> MailFolders { get; init; } 
+    public DbSet<User> Users { get; init; }  
+    public DbSet<UserMailFolder> MailFolders { get; init; } 
     public DbSet<UserMailboxSettings> MailboxSettings { get; init; }
-    public DbSet<ExchangeUsersSyncState> SyncStates { get; init; }
+    public DbSet<ExchangeSyncState> SyncStates { get; init; }
 
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
+        
         modelBuilder.HasDefaultSchema("DETECTIA");
+        modelBuilder.Entity<UserMailboxSettings>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+            b.HasOne<User>()
+                .WithOne(u => u.UserMailboxSettings!)
+                .HasForeignKey<UserMailboxSettings>(e => e.ExchangeUserId);
+        });
+        
+        modelBuilder.Entity<ExchangeSyncState>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
     }
     
     public override int SaveChanges()

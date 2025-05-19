@@ -1,10 +1,15 @@
-﻿namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+﻿using System.ComponentModel.DataAnnotations;
 
-public record ExchangeUser
+namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+
+public record User
 {
     // 1. Identity
-    public required string Id                                { get; init; }  // Graph user id (GUID)
-    public required bool AccountEnabled                      { get; set; }
+    [Key]
+    public long Id                                           { get; init; }  
+    public required string ExchangeUserId                    { get; init; }  // Graph user id (GUID) used by sync users to find user
+
+    public bool AccountEnabled                               { get; set; }
     public string? DisplayName                               { get; init; }
     public string? GivenName                                 { get; init; }
     public string? Surname                                   { get; init; }
@@ -28,15 +33,13 @@ public record ExchangeUser
     public string? OnPremisesImmutableId                     { get; init; }
     public string? UsageLocation                             { get; init; }
     public string? PreferredLanguage                         { get; init; }
-    public string? UserType                                  { get; init; }  // "Member" / "Guest"
+    public string? UserType                                  { get; init; }  
                                                                     
-    // 6. Change tracking                                           
     public DateTimeOffset? CreatedDateTime                   { get; init; }
-    public DateTimeOffset? LastPasswordChangeDateTime        { get; init; }
+    public DateTimeOffset? LastPasswordChangeDateTime        { get; set; }
 
-    // 7. Mailbox settings (nested)
-    public required UserMailboxSettings UserMailboxSettings  { get; init; }
-    public required List<ExchangeMailFolder> MailboxFolders  { get; init; }
+    public UserMailboxSettings? UserMailboxSettings          { get; init; }
+    public List<UserMailFolder>? MailboxFolders          { get; init; }
 
     public string? FoldersDeltaLink                          { get; set; }
 }
