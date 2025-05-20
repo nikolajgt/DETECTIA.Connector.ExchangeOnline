@@ -30,6 +30,15 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
         });
+        
+        // modelBuilder.Entity<UserMessage>(b =>
+        // {
+        //     b.HasKey(e => e.Id);
+        //     b.Property(e => e.Id).ValueGeneratedOnAdd();
+        //     b.HasOne<UserMailFolder>()
+        //         .WithOne(u => u.Id!)
+        //         .HasForeignKey<UserMessage>(e => e.ExchangeUserId);
+        // });
     }
     
     public override int SaveChanges()

@@ -1,6 +1,3 @@
 ﻿namespace DETECTIA.Connector.ExchangeOnline;
 
-public class AssemblyPointer
-{
-    
-}
+public class AssemblyPointer;

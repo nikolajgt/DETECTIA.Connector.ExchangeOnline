@@ -20,4 +20,10 @@
     <ItemGroup>
       <ProjectReference Include="..\DETECTIA.Connector.ExchangeOnline.Infrastructure\DETECTIA.Connector.ExchangeOnline.Infrastructure.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Features\SyncMailboxFolders\" />
+      <Folder Include="Features\SyncMailboxSettings\" />
+      <Folder Include="Features\SyncUsers\" />
+    </ItemGroup>
 </Project>

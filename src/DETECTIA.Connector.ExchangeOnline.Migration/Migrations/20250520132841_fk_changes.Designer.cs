@@ -4,6 +4,7 @@ using DETECTIA.Connector.ExchangeOnline.Migration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 {
     [DbContext(typeof(AppDatabaseContext))]
-    partial class AppDatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20250520132841_fk_changes")]
+    partial class fk_changes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -342,7 +345,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachements", b =>
                 {
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", "Message")
-                        .WithMany("Attachments")
+                        .WithMany("Attachements")
                         .HasForeignKey("MessageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -364,7 +367,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", b =>
                 {
-                    b.Navigation("Attachments");
+                    b.Navigation("Attachements");
                 });
 #pragma warning restore 612, 618
         }

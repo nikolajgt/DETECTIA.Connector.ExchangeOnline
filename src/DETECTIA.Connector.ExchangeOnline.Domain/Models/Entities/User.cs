@@ -42,4 +42,5 @@ public record User
     public List<UserMailFolder>? MailboxFolders          { get; init; }
 
     public string? FoldersDeltaLink                          { get; set; }
+
 }

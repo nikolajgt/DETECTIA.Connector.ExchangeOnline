@@ -7,17 +7,17 @@ namespace DETECTIA.Connector.ExchangeOnline;
 
 public class Worker(
     ILogger<Worker> logger,
-    SyncMetadata sync,
-    IDbContextFactory<AppDatabaseContext> factory) : BackgroundService
+    SyncMetadata sync) : BackgroundService
 {
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            await sync.SyncUsersAsync(stoppingToken);
-            await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
+           // await sync.SyncUsersAsync(stoppingToken);
+           // await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
             await sync.SyncUsersFoldersAsync(stoppingToken);
+            await sync.SyncAllUsersMessagesAsync(stoppingToken);
         }
         catch (Exception e)
         {

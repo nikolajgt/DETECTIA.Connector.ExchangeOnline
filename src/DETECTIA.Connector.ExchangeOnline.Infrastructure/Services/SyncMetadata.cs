@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.ODataErrors;
 using User = DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
@@ -241,6 +242,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 "totalItemCount",
                                 "unreadItemCount"
                             ];
+                            requestConfig.QueryParameters.Top = 100;
                         }, cancellationToken);
                         if(resp is null) continue;
 
@@ -255,6 +257,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 {
                                     var mapped = new UserMailFolder
                                     {
+                                        FolderId             = f.Id,
                                         DisplayName          = f.DisplayName!,
                                         ParentFolderId       = f.ParentFolderId,
                                         ChildFolderCount     = f.ChildFolderCount ?? 0,
@@ -295,7 +298,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
             await dbContext.BulkInsertOrUpdateAsync(usersFolders, new BulkConfig
             {
                 UpdateByProperties = ["ExchangeUserId"],
-                PropertiesToExcludeOnUpdate = ["ExchangeUserId"],
+                PropertiesToExcludeOnUpdate = ["ExchangeUserId, Id"],
                 SetOutputIdentity = false,
                 PreserveInsertOrder = false,
                 BatchSize = 500
@@ -307,5 +310,103 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
             logger.LogError(e, e.Message);
             throw;
         }
+    }
+    
+    public async Task SyncAllUsersMessagesAsync(CancellationToken cancellationToken)
+    {
+        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var users = await dbContext.Users
+            .Where(u => u.AccountEnabled)
+            .Include(x => x.MailboxFolders)
+            .ToListAsync(cancellationToken);
+
+        var userMessages = new List<UserMessage>();
+        foreach (var user in users)
+        {
+            
+            foreach (var folder in user.MailboxFolders!)
+            {
+                try
+                {
+                    var baseMsgBuilder = graph
+                        .Users[user.UserPrincipalName]
+                        .MailFolders[folder.FolderId]   
+                        .Messages
+                        .Delta;
+                        
+                    var msgBuilder = string.IsNullOrEmpty(folder.MessagesDeltaLink)
+                        ? baseMsgBuilder
+                        : baseMsgBuilder.WithUrl(folder.MessagesDeltaLink);
+
+                    string? nextMsgLink, newMsgDelta;
+                    do
+                    {
+                        var page = await msgBuilder.GetAsDeltaGetResponseAsync(cfg =>
+                        {
+                            cfg.QueryParameters.Select = new[]
+                            {
+                                "id",
+                                "subject",
+                                "from",
+                                "receivedDateTime",
+                                "isRead",
+                                "parentFolderId"
+                            };
+                            cfg.QueryParameters.Top = 100;
+                        }, cancellationToken);
+
+                        foreach (var m in page.Value)
+                        {
+                            if (!m.AdditionalData.ContainsKey("@removed"))
+                            {
+                                // userMessages.Add(new UserMessage
+                                // {
+                                //     MessageId         = m.Id!,
+                                //     FolderId          = folder.Id,        
+                                //     Subject           = m.Subject,
+                                //     From              = m.From?.EmailAddress?.Address,
+                                //     ReceivedDateTime  = m.ReceivedDateTime ?? default,
+                                //     IsRead            = m.IsRead ?? false,
+                                // });
+                            }
+                        }
+
+                        nextMsgLink   = page.OdataNextLink;
+                        newMsgDelta   = page.OdataDeltaLink;
+                        if (nextMsgLink != null)
+                            msgBuilder = msgBuilder.WithUrl(nextMsgLink);
+
+                    } while (nextMsgLink != null);
+
+                    folder.MessagesDeltaLink = newMsgDelta;
+                    dbContext.MailFolders.Update(folder);
+                }
+                catch (ODataError ex) when (ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogWarning("Skipping messages‐delta for folder {Folder} of {Upn}: {Err}", 
+                        folder.DisplayName, user.UserPrincipalName, ex.Message);
+                }
+            }
+        }
+
+        // 5) Bulk upsert all messages
+        await dbContext.BulkInsertOrUpdateAsync(userMessages, new BulkConfig
+        {
+            UpdateByProperties = 
+            [
+                nameof(UserMessage.MessageId),
+            ],
+            PropertiesToExcludeOnUpdate = 
+            [
+                nameof(UserMessage.Id),
+                nameof(UserMessage.MessageId),
+                nameof(UserMessage.FolderId)
+            ],
+            SetOutputIdentity   = false,
+            PreserveInsertOrder = false,
+            BatchSize           = 500
+        }, cancellationToken: cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

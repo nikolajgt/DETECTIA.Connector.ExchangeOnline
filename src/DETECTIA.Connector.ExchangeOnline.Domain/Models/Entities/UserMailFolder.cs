@@ -7,6 +7,8 @@ public record UserMailFolder : IEntityTracker
     /// <summary>Graph‐assigned folder ID (GUID).</summary>
     [Key]
     public long Id                     { get; init; }
+    
+    public required string FolderId               { get; init; }
 
     /// <summary>Human‐readable name (Inbox, Sent Items, etc.).</summary>
     public required string DisplayName            { get; set; }
@@ -24,11 +26,15 @@ public record UserMailFolder : IEntityTracker
     public required int UnreadItemCount           { get; set; }
     
     public required long ExchangeUserId         { get; init; }
-    public required User User             { get; init; }
+    public required User User              { get; init; }
 
     /// <summary>
     /// When this folder was last modified (e.g. renamed, moved).
     /// </summary>
     public DateTimeOffset? LastModifiedDateTime   { get; set; }
     public DateTimeOffset? LastSyncUtc            { get; set; }
+    public string? MessagesDeltaLink                          { get; set; }
+
+    
+    public List<UserMessage> Messages             { get; set; } = [];
 }
