@@ -15,9 +15,8 @@ public class Worker(
     {
         try
         {
-
-           await sync.SyncUsersAsync(stoppingToken);
-           await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
+            await sync.SyncUsersAsync(stoppingToken);
+            await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
             await sync.SyncUsersFoldersAsync(stoppingToken);
         }
         catch (Exception e)
