@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using System.Threading.Channels;
 using System.Threading.Tasks.Dataflow;
 using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 using DETECTIA.Connector.ExchangeOnline.Migration;
@@ -10,19 +9,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
-using User = Microsoft.Graph.Models.User;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
-
-public class PagedResult<T>
-{
-    public IReadOnlyList<T> Items       { get; init; } = [];
-    public int              PageNumber  { get; init; }
-    public int              PageSize    { get; init; }
-    public int              TotalCount  { get; init; }
-    public int              TotalPages  => (int)Math.Ceiling(TotalCount / (double)PageSize);
-}
-
 
 public class ContentScan(
     IContentSearch contentSearch, 
@@ -98,147 +86,232 @@ public class ContentScan(
     }
 
 
-    public async Task ScanEmailAttachmentsAsync(CancellationToken cancellationToken)
-    {
-        var batchSize  = 100;
-        var maxDegree  = Environment.ProcessorCount;
+   public async Task ScanEmailTextAsync(CancellationToken cancellationToken)
+{
+    var batchSize = 100;
+    var maxDegree = Environment.ProcessorCount;
 
-        var scanBlock = new TransformBlock<List<AttachmentBatch>, List<MessageAttachment>>(async batch => 
+    await DataflowPipeline.RunAsync<EmailTextBatchItem, Message>(
+        // ---- A) fetchPageAsync ----
+        async (lastId, ct) =>
         {
-            var batchNumber = batch.First().BatchNumber;
+            await using var ctx = await dbFactory.CreateDbContextAsync(ct);
+            return await ctx.Messages
+                .AsNoTracking()
+                .Where(m => !m.HasBeenScanned && m.Id > lastId)
+                .OrderBy(m => m.Id)
+                .Include(m => m.User)
+                .Select(m => new EmailTextBatchItem(
+                    m,
+                    m.User.UserPrincipalName!
+                ))
+                .Take(batchSize)
+                .ToListAsync(ct);
+        },
+
+        // ---- B) processBatchAsync ----
+        async (batch, ct) =>
+        {
             foreach (var item in batch)
             {
                 try
                 {
-                    var attachment = await graph
+                    var graphMsg = await graph
                         .Users[item.UserPrincipalName]
-                        .Messages[item.MessageGraphId]
-                        .Attachments[item.Attachment.GraphId]
-                        .GetAsync(cfg => {
-                                cfg.QueryParameters.Select = new[] {
-                                    "name",
-                                    "contentType",
-                                    "contentBytes"
-                                };
-                            },
-                            cancellationToken);
-                    
-                    if(attachment == null || attachment is not FileAttachment fileAttachment) continue;
-                    
-                    if(fileAttachment.ContentBytes is null) continue;
-                    
-                    if (ContentSearch.Infrastructure.Helpers.ContentTypeAndExtensionHelper.GetContentType(
-                            Path.GetExtension(attachment.Name).TrimStart('.'), out var attachmentContentType))
+                        .Messages[item.Message.GraphId]
+                        .GetAsync(cfg => 
+                            cfg.QueryParameters.Select = new[] { "subject", "body" },
+                            ct
+                        );
+
+                    var body = graphMsg?.Body?.Content;
+                    if (!string.IsNullOrEmpty(body))
                     {
-                        using var stream = new MemoryStream(fileAttachment.ContentBytes);
-                        var isSensitive = await contentSearch.ContainsAsync(stream, attachmentContentType, Encoding.UTF8);
-                        item.Attachment.ScannedTime = DateTimeOffset.Now;
-                        item.Attachment.HasBeenScanned = true;
-                        if (isSensitive)
-                        {
-                            logger.LogError("Sensitive something found");
-                            item.Attachment.ContainSensitive = true;
-                        }
+                        var resp = await contentSearch.MatchAsync(body);
+                        if (resp.Response.IsSensitive)
+                            item.Message.ContainSensitive = true;
                     }
+                    item.Message.HasBeenScanned = true;
                 }
                 catch (ODataError ex)
                 {
                     logger.LogWarning(
                         "Skipping scan for {User}/{Msg}: {Error}",
-                        item.UserPrincipalName, item.Attachment.GraphId, ex.Message);
+                        item.UserPrincipalName, item.Message.GraphId, ex.Message
+                    );
                 }
             }
-            logger.LogInformation("Finished scanning batch {}", batchNumber);
-            return batch.Select(x => x.Attachment).ToList();
+
+            // Return the actual Message entities for persistence
+            return batch.Select(x => x.Message).ToList();
         },
-        new ExecutionDataflowBlockOptions
+
+        // ---- C) persistBatchAsync ----
+        async (messages, ct) =>
         {
-            MaxDegreeOfParallelism = maxDegree,
-            BoundedCapacity        = maxDegree,
-            CancellationToken      = cancellationToken,
-            EnsureOrdered          = false,
-        });
-        
-        
-        var batchOf2 = new BatchBlock<List<MessageAttachment>>(2);
-        var flatten = new TransformBlock<List<MessageAttachment>[], List<MessageAttachment>>(
-            batches => batches.SelectMany(batch => batch).ToList(),
-            new ExecutionDataflowBlockOptions {
-                BoundedCapacity   = maxDegree,
-                CancellationToken = cancellationToken
-            });
-        
-        var persistBlock = new ActionBlock<List<MessageAttachment>>(
-            async batch =>
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            await db.BulkUpdateAsync(messages, new BulkConfig
             {
-                await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
-                await db.BulkInsertOrUpdateAsync(batch, new BulkConfig
+                UpdateByProperties          = new[] { nameof(Message.Id) },
+                PropertiesToIncludeOnUpdate = new[]
                 {
-                    UpdateByProperties          = [nameof(MessageAttachment.Id)],
-                    PropertiesToIncludeOnUpdate =
-                    [
-                        nameof(MessageAttachment.HasBeenScanned),
-                        nameof(MessageAttachment.ContainSensitive)
-                    ],
-                    BatchSize = batchSize
-                }, cancellationToken: cancellationToken);
-                
-                logger.LogInformation("Persisted batch with {} elements", batch.Count);
-            },
-            new ExecutionDataflowBlockOptions
-            {
-                MaxDegreeOfParallelism = 1,
-                BoundedCapacity        = maxDegree,
-                CancellationToken      = cancellationToken,
-                EnsureOrdered          = false
-            }
-        );
-        
-        scanBlock.LinkTo(batchOf2,    new DataflowLinkOptions { PropagateCompletion = true });
-        batchOf2.LinkTo(flatten,      new DataflowLinkOptions { PropagateCompletion = true });
-        flatten.LinkTo(persistBlock,  new DataflowLinkOptions { PropagateCompletion = true });
+                    nameof(Message.HasBeenScanned),
+                    nameof(Message.ContainSensitive)
+                },
+                BatchSize = batchSize
+            }, cancellationToken: ct);
+        },
 
-        long lastId = 0;
-        int batchNumber = 1;
-        while (true)
+        // ---- D) keySelector for paging ----
+        msg => msg.Id,
+
+        // ---- E) other options ----
+        fetchPageSize:     batchSize,
+        groupSize:         1,                       // no grouping of processed batches
+        maxDegreeOfParall: maxDegree,
+        cancellationToken: cancellationToken
+    );
+}
+
+
+    private async Task HandleFileAttachmentAsync(
+        FileAttachment fileAttachment, 
+        MessageAttachment dbItem,
+        CancellationToken cancellationToken)
+    {
+        if(fileAttachment.ContentBytes is null)
         {
-            await using var ctx = await dbFactory.CreateDbContextAsync(cancellationToken);
-            var batch = await ctx.MessagesAttachements
-                .AsNoTracking()
-                .Where(x => !x.HasBeenScanned && x.Message.Id > lastId)
-                .Include(x => x.Message)
-                .ThenInclude(x => x.User)
-                .OrderBy(x => x.Message.Id)
-                .Select(x => new AttachmentBatch
-                {
-                    BatchNumber = batchNumber,
-                    TotalBatchNumber = 999,
-                    MessageGraphId = x.Message!.GraphId,
-                    Attachment = x,
-                    UserPrincipalName = x.Message.User.UserPrincipalName!,
-                })
-                .Take(batchSize)
-                .ToListAsync(cancellationToken);
-
-            if (batch.Count == 0)
-                break;
-
-            lastId = batch.Last().Attachment.Id;
-
-            await scanBlock.SendAsync(item: batch, cancellationToken: cancellationToken);
-            batchNumber++;
+            logger.LogWarning("Teeeeeeeeeest");
+            return;
         }
 
-        scanBlock.Complete();
-        await scanBlock.Completion;
+        if (!ContentSearch.Infrastructure.Helpers.ContentTypeAndExtensionHelper.GetContentType(
+                Path.GetExtension(fileAttachment.Name).TrimStart('.'), out var attachmentContentType)) return;
+                    
+        await using var stream = new MemoryStream(fileAttachment.ContentBytes);
+        dbItem.ContainSensitive = await contentSearch.ContainsAsync(stream, attachmentContentType, Encoding.UTF8);
+        dbItem.ScannedTime = DateTimeOffset.Now;
+        dbItem.HasBeenScanned = true;
+    }
+
+    private async Task HandleItemAttachmentAsync(
+        ItemAttachment itemAttachment, 
+        MessageAttachment dbItem,
+        CancellationToken cancellationToken)
+    {
+        
+    }
+
+    private async Task HandleReferenceAttachmentAsync(
+        ReferenceAttachment referenceAttachment,
+        MessageAttachment dbItem,
+        CancellationToken cancellationToken)
+    {
+        
     }
 
     private record AttachmentBatch
     {
         internal int BatchNumber { get; init; }
-        internal int TotalBatchNumber { get; init; }
+        internal int TotalBatchCount { get; init; }
         internal MessageAttachment Attachment { get; init; }
         internal string MessageGraphId { get; init; }
         internal string UserPrincipalName { get; init; }
+    }
+
+
+    public async Task ScanEmailAttachmentsAsync(CancellationToken cancellationToken)
+    {
+        var batchSize = 100;
+        
+        await DataflowPipeline.RunAsync<AttachmentBatch, MessageAttachment>(
+            async (lastId, ct) => {
+                await using var ctx = await dbFactory.CreateDbContextAsync(ct);
+                return await ctx.MessagesAttachements
+                    .AsNoTracking()
+                    .Where(x => !x.HasBeenScanned && x.Id > lastId)
+                    .OrderBy(x => x.Id)
+                    .Include(x => x.Message)
+                        .ThenInclude(m => m.User)
+                    .Select(x => new AttachmentBatch {
+                        Attachment       = x,
+                        MessageGraphId   = x.Message!.GraphId,
+                        UserPrincipalName= x.Message.User.UserPrincipalName!
+                    })
+                    .Take(batchSize)
+                    .ToListAsync(ct);
+            },
+
+            async (batch, ct) => {
+                var batchNumber = batch.First().BatchNumber;
+                foreach (var item in batch)
+                {
+                    try
+                    {
+                        var attachment = await graph
+                            .Users[item.UserPrincipalName]
+                            .Messages[item.MessageGraphId]
+                            .Attachments[item.Attachment.GraphId]
+                            .GetAsync(cancellationToken: ct);
+                        
+                        if (attachment is null)
+                        {
+                            logger.LogWarning("Attachment returned was null for {item.MessageGraphId}", item.MessageGraphId);
+                            continue;
+                        }
+                    
+                        switch (attachment)
+                        {
+                            case FileAttachment fileAtt:
+                                await HandleFileAttachmentAsync(fileAtt, item.Attachment, ct);
+                                break;
+
+                            case ItemAttachment itemAtt:
+                                await HandleItemAttachmentAsync(itemAtt, item.Attachment, ct);
+                                break;
+                        
+                            case ReferenceAttachment refAtt:
+                                await HandleReferenceAttachmentAsync(refAtt, item.Attachment, ct);
+                                break;
+
+                            default:
+                                logger.LogWarning("Attachment {Id} is not a FileAttachment or ItemAttachment", attachment.Id);
+                                break;
+                        }
+                    }
+                    catch (ODataError ex)
+                    {
+                        logger.LogWarning(
+                            "Skipping scan for {User}/{Msg}: {Error}",
+                            item.UserPrincipalName, item.Attachment.GraphId, ex.Message);
+                    }
+                }
+                logger.LogInformation("Finished scanning batch {}", batchNumber);
+                return batch.Select(x => x.Attachment).ToList();
+            },
+
+            // 3) persistBatchAsync  (your save logic)
+            async (attachments, ct) => {
+                await using var db = await dbFactory.CreateDbContextAsync(ct);
+                await db.BulkUpdateAsync(attachments, new BulkConfig
+                {
+                    UpdateByProperties          = [nameof(MessageAttachment.Id)],
+                    PropertiesToIncludeOnUpdate =
+                    [
+                        nameof(MessageAttachment.HasBeenScanned),
+                        nameof(MessageAttachment.ContainSensitive),
+                        nameof(MessageAttachment.ScannedTime)
+                    ]
+                }, cancellationToken: ct);
+            },
+
+            // 4) keySelector
+            x => x.Attachment.Id,
+
+            fetchPageSize:     100,
+            groupSize:         2,       
+            maxDegreeOfParall: Environment.ProcessorCount,
+            cancellationToken: cancellationToken
+        );
     }
 }
