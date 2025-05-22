@@ -70,14 +70,14 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<string>("DisplayName")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ExchangeUserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("FoldersDeltaLink")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("GivenName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GraphId")
+                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("JobTitle")
@@ -143,7 +143,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<long>("ExchangeUserId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("FolderId")
+                    b.Property<string>("GraphId")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
@@ -201,14 +201,14 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<string>("DelegateMeetingMessageDeliveryOptions")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long>("ExchangeUserId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("TimeFormat")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TimeZone")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
 
                     b.PrimitiveCollection<string>("WorkingDays")
                         .HasColumnType("nvarchar(max)");
@@ -221,7 +221,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ExchangeUserId")
+                    b.HasIndex("UserId")
                         .IsUnique();
 
                     b.ToTable("MailboxSettings", "DETECTIA");
@@ -235,21 +235,27 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<bool?>("ContainSensitive")
+                        .HasColumnType("bit");
+
                     b.Property<long>("FolderId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("From")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("GraphId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("HasBeenScanned")
+                        .HasColumnType("bit");
+
                     b.Property<string>("InternetMessageId")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsRead")
                         .HasColumnType("bit");
-
-                    b.Property<string>("MessageId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("ReceivedDateTime")
                         .HasColumnType("datetimeoffset");
@@ -261,6 +267,9 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
                     b.Property<long?>("UserMailFolderId")
                         .HasColumnType("bigint");
 
@@ -268,10 +277,10 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     b.HasIndex("UserMailFolderId");
 
-                    b.ToTable("UserMessage", "DETECTIA");
+                    b.ToTable("Messages", "DETECTIA");
                 });
 
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachements", b =>
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachment", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -279,15 +288,22 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<bool?>("ContainSensitive")
+                        .HasColumnType("bit");
+
                     b.Property<byte[]>("ContentBytes")
                         .HasColumnType("varbinary(max)");
-
-                    b.Property<string>("ContentId")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GraphId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("HasBeenScanned")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsInline")
                         .HasColumnType("bit");
@@ -305,11 +321,14 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<int>("Size")
                         .HasColumnType("int");
 
+                    b.Property<long?>("UserMessageId")
+                        .HasColumnType("bigint");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("MessageId");
+                    b.HasIndex("UserMessageId");
 
-                    b.ToTable("UserMessageAttachements", "DETECTIA");
+                    b.ToTable("MessagesAttachements", "DETECTIA");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
@@ -327,7 +346,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 {
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", null)
                         .WithOne("UserMailboxSettings")
-                        .HasForeignKey("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailboxSettings", "ExchangeUserId")
+                        .HasForeignKey("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailboxSettings", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -339,15 +358,11 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                         .HasForeignKey("UserMailFolderId");
                 });
 
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachements", b =>
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachment", b =>
                 {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", "Message")
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", null)
                         .WithMany("Attachments")
-                        .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Message");
+                        .HasForeignKey("UserMessageId");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", b =>

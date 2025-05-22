@@ -9,6 +9,8 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     public DbSet<UserMailFolder> MailFolders { get; init; } 
     public DbSet<UserMailboxSettings> MailboxSettings { get; init; }
     public DbSet<ExchangeSyncState> SyncStates { get; init; }
+    public DbSet<UserMessage> Messages { get; init; }
+    public DbSet<UserMessageAttachment> MessagesAttachements { get; init; }
 
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -22,7 +24,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
             b.Property(e => e.Id).ValueGeneratedOnAdd();
             b.HasOne<User>()
                 .WithOne(u => u.UserMailboxSettings!)
-                .HasForeignKey<UserMailboxSettings>(e => e.ExchangeUserId);
+                .HasForeignKey<UserMailboxSettings>(e => e.UserId);
         });
         
         modelBuilder.Entity<ExchangeSyncState>(b =>

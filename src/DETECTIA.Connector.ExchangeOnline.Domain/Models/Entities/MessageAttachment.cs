@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
-public class UserMessageAttachements
+public class UserMessageAttachment
 {
     [Key]
     public long Id                                     { get; init; }
@@ -12,6 +12,8 @@ public class UserMessageAttachements
     /// FK to the parent message in your DB.
     /// </summary>
     public required long MessageId { get; set; }
+    
+    public required string GraphId { get; set; }
 
     /// <summary>
     /// The file name (e.g. "report.pdf").
@@ -33,24 +35,14 @@ public class UserMessageAttachements
     /// </summary>
     public bool IsInline { get; set; }
 
-    /// <summary>
-    /// The Content-ID header, if inline (for HTML embedding).
-    /// </summary>
-    public string? ContentId { get; set; }
-
-    /// <summary>
-    /// Raw bytes of the file. Only populated if you choose to download it.
-    /// </summary>
-    public byte[]? ContentBytes { get; set; }
+    public required bool HasBeenScanned { get; set; }
+    public bool? ContainSensitive { get; set; }
 
     /// <summary>
     /// When the attachment was last modified on the server.
     /// </summary>
     public DateTimeOffset? LastModifiedDateTime { get; set; }
-
-    /// <summary>
-    /// Navigation back to the parent message.
-    /// </summary>
+    public DateTimeOffset? ScannedTime { get; set; }
     [ForeignKey(nameof(MessageId))]
-    public virtual UserMessage? Message { get; set; }
+    public UserMessage? Message      { get; init; }  
 }

@@ -68,7 +68,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                 {
                     if (u.AdditionalData?.ContainsKey("@removed") == true)
                     {
-                        var user = await dbContext.Users.SingleOrDefaultAsync(x => x.ExchangeUserId == u.Id, cancellationToken);
+                        var user = await dbContext.Users.SingleOrDefaultAsync(x => x.GraphId == u.Id, cancellationToken);
                         if (user is null) continue;
                         user.AccountEnabled = false;
                         dbContext.Users.Update(user);
@@ -77,7 +77,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                     {
                         users.Add(new User
                         {
-                            ExchangeUserId = u.Id!,
+                            GraphId = u.Id!,
                             AccountEnabled = u.AccountEnabled ?? false,
                             DisplayName = u.DisplayName!,
                             GivenName = u.GivenName!,
@@ -150,7 +150,6 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                     .MailboxSettings
                     .GetAsync(cfg =>
                     {
-                        // pick only the fields you need
                         cfg.QueryParameters.Select = new[]
                         {
                             "archiveFolder",
@@ -165,7 +164,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
 
                 var mapped = new UserMailboxSettings
                 {
-                    ExchangeUserId = u.Id,
+                    UserId = u.Id,
                     ArchiveFolder = graphSettings?.ArchiveFolder,
                     AutomaticRepliesEnabled =
                         graphSettings?.AutomaticRepliesSetting?.Status != AutomaticRepliesStatus.Disabled,
@@ -200,8 +199,15 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         
         await dbContext.BulkInsertOrUpdateAsync(mailboxSetting, new BulkConfig
         {
-            UpdateByProperties = ["ExchangeUserId"],
-            PropertiesToExcludeOnUpdate = ["ExchangeUserId"],
+            UpdateByProperties = 
+            [
+                nameof(UserMailboxSettings.UserId),
+            ],
+            PropertiesToExcludeOnUpdate = 
+            [
+                nameof(UserMailboxSettings.Id),
+                nameof(UserMailboxSettings.UserId)
+            ],
             SetOutputIdentity = false,
             PreserveInsertOrder = false,
             BatchSize = 500
@@ -242,7 +248,6 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 "totalItemCount",
                                 "unreadItemCount"
                             ];
-                            requestConfig.QueryParameters.Top = 100;
                         }, cancellationToken);
                         if(resp is null) continue;
 
@@ -257,7 +262,8 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 {
                                     var mapped = new UserMailFolder
                                     {
-                                        FolderId             = f.Id,
+                                        GraphId             = f.Id,
+                                        UserId                = user.Id,
                                         DisplayName          = f.DisplayName!,
                                         ParentFolderId       = f.ParentFolderId,
                                         ChildFolderCount     = f.ChildFolderCount ?? 0,
@@ -297,8 +303,8 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
             }
             await dbContext.BulkInsertOrUpdateAsync(usersFolders, new BulkConfig
             {
-                UpdateByProperties = ["ExchangeUserId"],
-                PropertiesToExcludeOnUpdate = ["ExchangeUserId, Id"],
+                UpdateByProperties = [ nameof(UserMailFolder.GraphId) ],
+                PropertiesToExcludeOnUpdate = [ nameof(UserMailFolder.GraphId), nameof(UserMailFolder.Id) ],
                 SetOutputIdentity = false,
                 PreserveInsertOrder = false,
                 BatchSize = 500
@@ -323,14 +329,13 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         var userMessages = new List<UserMessage>();
         foreach (var user in users)
         {
-            
             foreach (var folder in user.MailboxFolders!)
             {
                 try
                 {
                     var baseMsgBuilder = graph
                         .Users[user.UserPrincipalName]
-                        .MailFolders[folder.FolderId]   
+                        .MailFolders[folder.GraphId]   
                         .Messages
                         .Delta;
                         
@@ -350,24 +355,32 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 "from",
                                 "receivedDateTime",
                                 "isRead",
-                                "parentFolderId"
+                                "parentFolderId",
+                                "internetMessageId"
                             };
                             cfg.QueryParameters.Top = 100;
                         }, cancellationToken);
 
                         foreach (var m in page.Value)
                         {
-                            if (!m.AdditionalData.ContainsKey("@removed"))
+                            if (m.AdditionalData.ContainsKey("@removed"))
                             {
-                                // userMessages.Add(new UserMessage
-                                // {
-                                //     MessageId         = m.Id!,
-                                //     FolderId          = folder.Id,        
-                                //     Subject           = m.Subject,
-                                //     From              = m.From?.EmailAddress?.Address,
-                                //     ReceivedDateTime  = m.ReceivedDateTime ?? default,
-                                //     IsRead            = m.IsRead ?? false,
-                                // });
+                                // set object to removed/deleted
+                            }
+                            else
+                            {
+                                userMessages.Add(new UserMessage
+                                {
+                                    GraphId         = m.Id!,
+                                    FolderId          = folder.Id,        
+                                    UserId            = user.Id,
+                                    Subject           = m.Subject,
+                                    From              = m.From?.EmailAddress?.Address,
+                                    ReceivedDateTime  = m.ReceivedDateTime ?? default,
+                                    IsRead            = m.IsRead ?? false,
+                                    InternetMessageId = m.InternetMessageId!,
+                                    HasBeenScanned    = false,
+                                });
                             }
                         }
 
@@ -394,13 +407,97 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         {
             UpdateByProperties = 
             [
-                nameof(UserMessage.MessageId),
+                nameof(UserMessage.GraphId),
             ],
             PropertiesToExcludeOnUpdate = 
             [
                 nameof(UserMessage.Id),
-                nameof(UserMessage.MessageId),
-                nameof(UserMessage.FolderId)
+                nameof(UserMessage.GraphId)
+            ],
+            SetOutputIdentity   = false,
+            PreserveInsertOrder = false,
+            BatchSize           = 500
+        }, cancellationToken: cancellationToken);
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+    
+    public async Task SyncAllUsersMessageAttachmentsAsync(CancellationToken cancellationToken)
+    {
+        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
+        
+        var msgByUser = await (
+                from m in dbContext.Messages.AsNoTracking()
+                join u in dbContext.Users.AsNoTracking()
+                    on m.UserId equals u.Id
+                select new { u.UserPrincipalName, m.GraphId, m.Id }
+            ).ToListAsync(cancellationToken);
+        
+        var attachments = new List<UserMessageAttachment>();
+        foreach (var message in msgByUser)
+        {
+             try
+            {
+                // 2) Fetch the attachments metadata
+                var resp = await graph
+                    .Users[message.UserPrincipalName]  
+                    .Messages[message.GraphId]
+                    .Attachments
+                    .GetAsync(cfg =>
+                    {
+                        cfg.QueryParameters.Select = new[]
+                        {
+                            "id",
+                            "name",
+                            "contentType",
+                            "size",
+                            "isInline",
+                            "lastModifiedDateTime"
+                        };
+                    }, cancellationToken);
+
+                foreach (var a in resp.Value)
+                {
+                    attachments.Add(new UserMessageAttachment
+                    {
+                        Id                    = 0,              
+                        MessageId             = message.Id,    
+                        GraphId               = a.Id,
+                        Name                  = a.Name!,
+                        ContentType           = a.ContentType!,
+                        Size                  = a.Size ?? 0,
+                        IsInline              = a.IsInline ?? false,
+                        LastModifiedDateTime  = a.LastModifiedDateTime,
+                        HasBeenScanned        = false,
+                    });
+                }
+
+            }
+            catch (ODataError ex)
+            {
+                if (ex.Message.Contains("inactive",   StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("soft-deleted",StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("not found",   StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogWarning(
+                        "Skipping attachments for message {MsgId}: {Error}",
+                        message.Id, ex.Message);
+                    continue;
+                }
+                throw;
+            }
+        }
+
+        await dbContext.BulkInsertOrUpdateAsync(attachments, new BulkConfig
+        {
+            UpdateByProperties = [
+            
+                nameof(UserMessageAttachment.Id),
+                nameof(UserMessageAttachment.MessageId)
+            ],
+            PropertiesToExcludeOnUpdate = [
+                nameof(UserMessageAttachment.Id),
+                nameof(UserMessageAttachment.MessageId)
             ],
             SetOutputIdentity   = false,
             PreserveInsertOrder = false,

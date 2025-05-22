@@ -7,7 +7,7 @@ public record User
     // 1. Identity
     [Key]
     public long Id                                           { get; init; }  
-    public required string ExchangeUserId                    { get; init; }  // Graph user id (GUID) used by sync users to find user
+    public required string GraphId                           { get; set; }
 
     public bool AccountEnabled                               { get; set; }
     public string? DisplayName                               { get; init; }
@@ -39,7 +39,7 @@ public record User
     public DateTimeOffset? LastPasswordChangeDateTime        { get; set; }
 
     public UserMailboxSettings? UserMailboxSettings          { get; init; }
-    public List<UserMailFolder>? MailboxFolders          { get; init; }
+    public List<UserMailFolder>? MailboxFolders              { get; init; }
 
     public string? FoldersDeltaLink                          { get; set; }
 

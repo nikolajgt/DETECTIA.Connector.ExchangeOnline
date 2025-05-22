@@ -17,5 +17,5 @@ public record UserMailboxSettings
     public TimeSpan?             WorkingHoursStartTime                 { get; set; }
     public TimeSpan?             WorkingHoursEndTime                   { get; set; }
     public string?               DelegateMeetingMessageDeliveryOptions { get; set; }
-    public long                ExchangeUserId                          { get; init; }
+    public long                UserId                          { get; init; }
 }

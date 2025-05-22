@@ -8,7 +8,9 @@ public record UserMailFolder : IEntityTracker
     [Key]
     public long Id                     { get; init; }
     
-    public required string FolderId               { get; init; }
+    public required string GraphId { get; set; }
+    public required long UserId                        { get; init; }
+    
 
     /// <summary>Human‐readable name (Inbox, Sent Items, etc.).</summary>
     public required string DisplayName            { get; set; }

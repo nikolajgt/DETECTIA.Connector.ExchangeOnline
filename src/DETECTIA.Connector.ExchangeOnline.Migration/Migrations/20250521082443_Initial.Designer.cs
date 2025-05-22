@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 {
     [DbContext(typeof(AppDatabaseContext))]
-    [Migration("20250520121330_user_message")]
-    partial class user_message
+    [Migration("20250521082443_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -95,9 +95,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<string>("MailNickname")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("MessagesDeltaLink")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("MobilePhone")
                         .HasColumnType("nvarchar(max)");
 
@@ -158,6 +155,9 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     b.Property<DateTimeOffset?>("LastSyncUtc")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("MessagesDeltaLink")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ParentFolderId")
                         .HasColumnType("nvarchar(max)");
@@ -230,6 +230,91 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.ToTable("MailboxSettings", "DETECTIA");
                 });
 
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("FolderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("From")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InternetMessageId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MessageId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("ReceivedDateTime")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Subject")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.PrimitiveCollection<string>("ToRecipients")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("UserMailFolderId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserMailFolderId");
+
+                    b.ToTable("UserMessage", "DETECTIA");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachements", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<byte[]>("ContentBytes")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsInline")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("LastModifiedDateTime")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Size")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.ToTable("UserMessageAttachements", "DETECTIA");
+                });
+
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
                 {
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
@@ -250,11 +335,39 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", b =>
+                {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", null)
+                        .WithMany("Messages")
+                        .HasForeignKey("UserMailFolderId");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachements", b =>
+                {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", "Message")
+                        .WithMany("Attachments")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", b =>
                 {
                     b.Navigation("MailboxFolders");
 
                     b.Navigation("UserMailboxSettings");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", b =>
+                {
+                    b.Navigation("Attachments");
                 });
 #pragma warning restore 612, 618
         }

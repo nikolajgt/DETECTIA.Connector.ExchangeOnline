@@ -1,9 +1,13 @@
 ﻿using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using Azure.Identity;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Options;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Migration;
+using DETECTIA.ContentSearch;
+using DETECTIA.ContentSearch.Application;
+using DETECTIA.ContentSearch.Infrastructure.SearchServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
@@ -75,7 +79,17 @@ public static class ConfigureServices
             var adapter = new HttpClientRequestAdapter(authProvider, httpClient: httpClient);
             return new GraphServiceClient(adapter);
         });
+        var regexPatterns = configuration
+            .GetSection("ContentSearch:RegexPattern")
+            .Get<List<string>>()!
+            .Select(x => new Regex(x))
+            .ToList();
+        
+        
+        services.AddTransient<ISearchTextService, SearchTextService>();
+        services.AddContentSearch(regexPatterns);
         services.AddTransient<SyncMetadata>();
+        services.AddTransient<ContentScan>();
         return services;
     }
 }
