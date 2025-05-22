@@ -4,6 +4,7 @@ using DETECTIA.Connector.ExchangeOnline.Migration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 {
     [DbContext(typeof(AppDatabaseContext))]
-    partial class AppDatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20250522140627_message_pipeline_changes")]
+    partial class message_pipeline_changes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -54,6 +57,9 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<bool?>("ContainSensitive")
+                        .HasColumnType("bit");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -66,9 +72,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsInline")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("IsSensitive")
                         .HasColumnType("bit");
 
                     b.Property<DateTimeOffset?>("LastModifiedAt")
@@ -280,6 +283,9 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<bool?>("ContainSensitive")
+                        .HasColumnType("bit");
+
                     b.Property<long>("FolderId")
                         .HasColumnType("bigint");
 
@@ -297,9 +303,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsRead")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("IsSensitive")
                         .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("ReceivedAt")

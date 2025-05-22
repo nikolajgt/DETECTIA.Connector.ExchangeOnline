@@ -20,7 +20,8 @@ public class Worker(
             await sync.SyncUsersFoldersAsync(stoppingToken);
             await sync.SyncAllUsersMessagesAsync(stoppingToken);
             await sync.SyncAllUsersMessageAttachmentsAsync(stoppingToken);
-            
+
+            await scan.ScanEmailTextAsync(stoppingToken);
             await scan.ScanEmailAttachmentsAsync(stoppingToken);
         }
         catch (Exception e)

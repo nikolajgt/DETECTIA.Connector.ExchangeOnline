@@ -375,7 +375,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                     UserId            = user.Id,
                                     Subject           = m.Subject,
                                     From              = m.From?.EmailAddress?.Address,
-                                    ReceivedDateTime  = m.ReceivedDateTime ?? default,
+                                    ReceivedAt        = m.ReceivedDateTime ?? default,
                                     IsRead            = m.IsRead ?? false,
                                     InternetMessageId = m.InternetMessageId!,
                                     HasBeenScanned    = false,
@@ -466,7 +466,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                         ContentType           = a.ContentType!,
                         Size                  = a.Size ?? 0,
                         IsInline              = a.IsInline ?? false,
-                        LastModifiedDateTime  = a.LastModifiedDateTime,
+                        LastModifiedAt  = a.LastModifiedDateTime,
                         HasBeenScanned        = false,
                     });
                 }

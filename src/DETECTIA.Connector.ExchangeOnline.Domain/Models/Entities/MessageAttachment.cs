@@ -34,15 +34,16 @@ public class MessageAttachment
     /// True if this was an inline (embedded) attachment.
     /// </summary>
     public bool IsInline { get; set; }
+    public bool IsDeleted { get; set; }
 
     public required bool HasBeenScanned { get; set; }
-    public bool? ContainSensitive { get; set; }
+    public bool? IsSensitive { get; set; }
 
     /// <summary>
     /// When the attachment was last modified on the server.
     /// </summary>
-    public DateTimeOffset? LastModifiedDateTime { get; set; }
-    public DateTimeOffset? ScannedTime { get; set; }
+    public DateTimeOffset? LastModifiedAt { get; set; }
+    public DateTimeOffset? ScannedAt { get; set; }
     [ForeignKey(nameof(MessageId))]
     public UserMessage? Message      { get; init; }  
 }

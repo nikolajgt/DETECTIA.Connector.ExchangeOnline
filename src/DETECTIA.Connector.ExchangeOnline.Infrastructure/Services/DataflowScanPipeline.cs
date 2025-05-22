@@ -18,17 +18,15 @@ public static class DataflowPipeline
         CancellationToken cancellationToken = default
     )
     {
-        var scanBlock = new TransformBlock<List<TInput>, List<TProcessed>>(async batch =>
-        {
-            return await processBatchAsync(batch, cancellationToken);
-        },
-        new ExecutionDataflowBlockOptions
-        {
-            MaxDegreeOfParallelism = maxDegreeOfParall,
-            BoundedCapacity        = maxDegreeOfParall / 2,
-            CancellationToken      = cancellationToken,
-            EnsureOrdered          = false
-        });
+        var scanBlock = new TransformBlock<List<TInput>, List<TProcessed>>(async batch
+                => await processBatchAsync(batch, cancellationToken),
+            new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = maxDegreeOfParall,
+                BoundedCapacity        = maxDegreeOfParall / 2,
+                CancellationToken      = cancellationToken,
+                EnsureOrdered          = false
+            });
 
         ISourceBlock<List<TProcessed>> afterGrouping = scanBlock;
         if (groupSize > 1)
