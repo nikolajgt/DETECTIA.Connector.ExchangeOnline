@@ -27,7 +27,6 @@ public record UserMailFolder : IEntityTracker
     /// <summary>Unread items in this folder.</summary>
     public required int UnreadItemCount           { get; set; }
     
-    public required long ExchangeUserId         { get; init; }
     public required User User              { get; init; }
 
     /// <summary>

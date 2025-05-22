@@ -10,7 +10,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     public DbSet<UserMailboxSettings> MailboxSettings { get; init; }
     public DbSet<ExchangeSyncState> SyncStates { get; init; }
     public DbSet<UserMessage> Messages { get; init; }
-    public DbSet<UserMessageAttachment> MessagesAttachements { get; init; }
+    public DbSet<MessageAttachment> MessagesAttachements { get; init; }
 
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)

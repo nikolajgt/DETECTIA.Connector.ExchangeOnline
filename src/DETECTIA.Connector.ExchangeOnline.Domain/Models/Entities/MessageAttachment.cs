@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
-public class UserMessageAttachment
+public class MessageAttachment
 {
     [Key]
     public long Id                                     { get; init; }

@@ -270,7 +270,6 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                         TotalItemCount       = f.TotalItemCount ?? 0,
                                         UnreadItemCount      = f.UnreadItemCount ?? 0,
                                         LastModifiedDateTime = DateTimeOffset.UtcNow,
-                                        ExchangeUserId       = user.Id,
                                         User                 = user
                                     };
 
@@ -288,7 +287,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                     while (nextLink != null);
                     user.FoldersDeltaLink = deltaLink;
                 }
-                catch (Microsoft.Graph.Models.ODataErrors.ODataError ex)
+                catch (ODataError ex)
                 {
                     if (!ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase)
                         && !ex.Message.Contains("soft-deleted", StringComparison.OrdinalIgnoreCase)
@@ -371,7 +370,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                             {
                                 userMessages.Add(new UserMessage
                                 {
-                                    GraphId         = m.Id!,
+                                    GraphId           = m.Id!,
                                     FolderId          = folder.Id,        
                                     UserId            = user.Id,
                                     Subject           = m.Subject,
@@ -433,7 +432,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                 select new { u.UserPrincipalName, m.GraphId, m.Id }
             ).ToListAsync(cancellationToken);
         
-        var attachments = new List<UserMessageAttachment>();
+        var attachments = new List<MessageAttachment>();
         foreach (var message in msgByUser)
         {
              try
@@ -458,7 +457,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
 
                 foreach (var a in resp.Value)
                 {
-                    attachments.Add(new UserMessageAttachment
+                    attachments.Add(new MessageAttachment
                     {
                         Id                    = 0,              
                         MessageId             = message.Id,    
@@ -492,12 +491,12 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         {
             UpdateByProperties = [
             
-                nameof(UserMessageAttachment.Id),
-                nameof(UserMessageAttachment.MessageId)
+                nameof(MessageAttachment.Id),
+                nameof(MessageAttachment.MessageId)
             ],
             PropertiesToExcludeOnUpdate = [
-                nameof(UserMessageAttachment.Id),
-                nameof(UserMessageAttachment.MessageId)
+                nameof(MessageAttachment.Id),
+                nameof(MessageAttachment.MessageId)
             ],
             SetOutputIdentity   = false,
             PreserveInsertOrder = false,

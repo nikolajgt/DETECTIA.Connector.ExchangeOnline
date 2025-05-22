@@ -22,7 +22,7 @@ public record UserMessage
     public required bool HasBeenScanned { get; set; }
     public bool? ContainSensitive { get; set; }
     
-    public List<UserMessageAttachment>? Attachments  { get; init; } = [];
+    public List<MessageAttachment>? Attachments  { get; init; } = [];
     
     
     [ForeignKey(nameof(UserId))]
