@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
+[Index(nameof(GraphId))]
 public record UserMailFolder : IEntityTracker
 {
     /// <summary>Graph‐assigned folder ID (GUID).</summary>
@@ -32,7 +34,7 @@ public record UserMailFolder : IEntityTracker
     /// <summary>
     /// When this folder was last modified (e.g. renamed, moved).
     /// </summary>
-    public DateTimeOffset? LastModifiedDateTime   { get; set; }
+    public DateTimeOffset? LastModifiedAt   { get; set; }
     public DateTimeOffset? LastSyncUtc            { get; set; }
     public string? MessagesDeltaLink                          { get; set; }
 

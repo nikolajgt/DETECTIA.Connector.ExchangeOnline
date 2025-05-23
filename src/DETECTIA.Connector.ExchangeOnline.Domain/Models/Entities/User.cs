@@ -1,7 +1,10 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
+[Index(nameof(GraphId))]
+[Index(nameof(Mail))]
 public record User
 {
     // 1. Identity
@@ -15,7 +18,7 @@ public record User
     public string? Surname                                   { get; init; }
                                                                     
     // 2. Mail / login                                              
-    public string? Mail                                      { get; init; }  // primary SMTP address
+    public string? Mail                                      { get; init; }
     public string? UserPrincipalName                         { get; init; }
     public string? MailNickname                              { get; init; }
                                                                     
@@ -35,11 +38,12 @@ public record User
     public string? PreferredLanguage                         { get; init; }
     public string? UserType                                  { get; init; }  
                                                                     
-    public DateTimeOffset? CreatedDateTime                   { get; init; }
-    public DateTimeOffset? LastPasswordChangeDateTime        { get; set; }
-
+    public DateTimeOffset? CreatedAt                         { get; init; }
+    public DateTimeOffset? LastPasswordChangeAt              { get; set; }
+    
     public UserMailboxSettings? UserMailboxSettings          { get; init; }
     public List<UserMailFolder>? MailboxFolders              { get; init; }
+    public List<UserGroup>? Groups                           { get; init; }
 
     public string? FoldersDeltaLink                          { get; set; }
 

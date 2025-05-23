@@ -8,9 +8,14 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     public DbSet<User> Users { get; init; }  
     public DbSet<UserMailFolder> MailFolders { get; init; } 
     public DbSet<UserMailboxSettings> MailboxSettings { get; init; }
+    public DbSet<UserMessage> UserMessages { get; init; }
+    public DbSet<UserGroup> UserGroups { get; init; }
+    public DbSet<UserMessageAttachment> MessageAttachments { get; init; }
+    public DbSet<Match> Matches { get; init; }
+
     public DbSet<ExchangeSyncState> SyncStates { get; init; }
-    public DbSet<UserMessage> Messages { get; init; }
-    public DbSet<MessageAttachment> MessagesAttachements { get; init; }
+    public DbSet<CalenderEvent> CalenderEvents { get; init; }
+    public DbSet<EventParticipent> EventParticipant { get; init; }
 
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -32,15 +37,40 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
         });
+        modelBuilder.Entity<User>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+        modelBuilder.Entity<UserMessage>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+        modelBuilder.Entity<UserMessageAttachment>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
         
-        // modelBuilder.Entity<UserMessage>(b =>
-        // {
-        //     b.HasKey(e => e.Id);
-        //     b.Property(e => e.Id).ValueGeneratedOnAdd();
-        //     b.HasOne<UserMailFolder>()
-        //         .WithOne(u => u.Id!)
-        //         .HasForeignKey<UserMessage>(e => e.ExchangeUserId);
-        // });
+        modelBuilder.Entity<UserMailFolder>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+        
+        modelBuilder.Entity<UserGroup>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+        
+        modelBuilder.Entity<Match>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
+        });
+
     }
     
     public override int SaveChanges()

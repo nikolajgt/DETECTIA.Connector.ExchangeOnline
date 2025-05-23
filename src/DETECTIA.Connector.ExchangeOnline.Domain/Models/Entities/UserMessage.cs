@@ -1,13 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
+[Index(nameof(GraphId))]
 public record UserMessage
 {
     [Key]
     public long Id                                     { get; init; }
-    public required string GraphId { get; set; }
+    public required string GraphId                     { get; init; }
     public required long   FolderId                    { get; init; }  
     public required long UserId                        { get; init; }
     public string?           Subject                   { get; init; }
@@ -19,10 +21,9 @@ public record UserMessage
     public required bool HasBeenScanned                { get; set; }
     public bool? IsSensitive                           { get; set; }
     public DateTimeOffset? ScannedAt                   { get; set; }
-    
-    public List<MessageAttachment>? Attachments        { get; init; } = [];
-    
-    
+
+    public List<Match>? Matches                        { get; init; } = [];
+    public List<UserMessageAttachment>? Attachments    { get; init; } = [];
     [ForeignKey(nameof(UserId))]
-    public User? User      { get; init; }  
+    public User? User                                  { get; init; }  
 }

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using Task = System.Threading.Tasks.Task;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 
@@ -28,7 +29,7 @@ public class ContentScan(
             async (lastId, ct) =>
             {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
-                return await ctx.Messages
+                return await ctx.UserMessages
                     .AsNoTracking()
                     .Where(m => !m.HasBeenScanned && m.Id > lastId)
                     .OrderBy(m => m.Id)
@@ -90,8 +91,7 @@ public class ContentScan(
             msg => msg.Entity.Id,
     
             // ---- E) other options ----
-            fetchPageSize:     batchSize,
-            groupSize:         1,                       
+            groupBatches:         1,                       
             maxDegreeOfParall: maxDegree,
             cancellationToken: cancellationToken
         );
@@ -101,10 +101,10 @@ public class ContentScan(
     {
         var batchSize = 100;
         
-        await DataflowPipeline.RunAsync<AttachmentBatch, MessageAttachment>(
+        await DataflowPipeline.RunAsync<AttachmentBatch, UserMessageAttachment>(
             async (lastId, ct) => {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
-                return await ctx.MessagesAttachements
+                return await ctx.MessageAttachments
                     .AsNoTracking()
                     .Where(x => !x.HasBeenScanned && x.Id > lastId)
                     .OrderBy(x => x.Id)
@@ -171,12 +171,12 @@ public class ContentScan(
                 await using var db = await dbFactory.CreateDbContextAsync(ct);
                 await db.BulkUpdateAsync(attachments, new BulkConfig
                 {
-                    UpdateByProperties          = [nameof(MessageAttachment.Id)],
+                    UpdateByProperties          = [nameof(UserMessageAttachment.Id)],
                     PropertiesToIncludeOnUpdate =
                     [
-                        nameof(MessageAttachment.HasBeenScanned),
-                        nameof(MessageAttachment.IsSensitive),
-                        nameof(MessageAttachment.ScannedAt)
+                        nameof(UserMessageAttachment.HasBeenScanned),
+                        nameof(UserMessageAttachment.IsSensitive),
+                        nameof(UserMessageAttachment.ScannedAt)
                     ]
                 }, cancellationToken: ct);
             },
@@ -184,8 +184,7 @@ public class ContentScan(
             // 4) keySelector
             x => x.Entity.Id,
 
-            fetchPageSize:     100,
-            groupSize:         2,       
+            groupBatches:         2,       
             maxDegreeOfParall: Environment.ProcessorCount,
             cancellationToken: cancellationToken
         );
@@ -193,7 +192,7 @@ public class ContentScan(
     
     private async Task HandleFileAttachmentAsync(
         FileAttachment fileAttachment, 
-        MessageAttachment dbItem,
+        UserMessageAttachment dbItem,
         CancellationToken cancellationToken)
     {
         if(fileAttachment.ContentBytes is null)
@@ -213,7 +212,7 @@ public class ContentScan(
 
     private async Task HandleItemAttachmentAsync(
         ItemAttachment itemAttachment, 
-        MessageAttachment dbItem,
+        UserMessageAttachment dbItem,
         CancellationToken cancellationToken)
     {
         
@@ -221,7 +220,7 @@ public class ContentScan(
 
     private async Task HandleReferenceAttachmentAsync(
         ReferenceAttachment referenceAttachment,
-        MessageAttachment dbItem,
+        UserMessageAttachment dbItem,
         CancellationToken cancellationToken)
     {
         
@@ -240,7 +239,7 @@ public class ContentScan(
     {
         internal int BatchNumber { get; init; }
         internal int TotalBatchCount { get; init; }
-        internal required MessageAttachment Entity { get; init; }
+        internal required UserMessageAttachment Entity { get; init; }
         internal required string MessageGraphId { get; init; }
         internal required string UserPrincipalName { get; init; }
     }

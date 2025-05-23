@@ -95,8 +95,8 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                             UsageLocation = u.UsageLocation!,
                             PreferredLanguage = u.PreferredLanguage!,
                             UserType = u.UserType!,
-                            CreatedDateTime = u.CreatedDateTime,
-                            LastPasswordChangeDateTime = u.LastPasswordChangeDateTime,
+                            CreatedAt = u.CreatedDateTime,
+                            LastPasswordChangeAt = u.LastPasswordChangeDateTime,
                             UserMailboxSettings = null, // these get fetched elsewhere
                             MailboxFolders = null, // these get fetched elsewhere
                             FoldersDeltaLink = null, // these get fetched elsewhere
@@ -262,14 +262,14 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 {
                                     var mapped = new UserMailFolder
                                     {
-                                        GraphId             = f.Id,
-                                        UserId                = user.Id,
+                                        GraphId              = f.Id!,
+                                        UserId               = user.Id,
                                         DisplayName          = f.DisplayName!,
                                         ParentFolderId       = f.ParentFolderId,
                                         ChildFolderCount     = f.ChildFolderCount ?? 0,
                                         TotalItemCount       = f.TotalItemCount ?? 0,
                                         UnreadItemCount      = f.UnreadItemCount ?? 0,
-                                        LastModifiedDateTime = DateTimeOffset.UtcNow,
+                                        LastModifiedAt = DateTimeOffset.UtcNow,
                                         User                 = user
                                     };
 
@@ -358,8 +358,9 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                                 "internetMessageId"
                             };
                             cfg.QueryParameters.Top = 100;
-                        }, cancellationToken);
-
+                        }, cancellationToken) ?? new();
+                        
+                        
                         foreach (var m in page.Value)
                         {
                             if (m.AdditionalData.ContainsKey("@removed"))
@@ -426,20 +427,20 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
         
         var msgByUser = await (
-                from m in dbContext.Messages.AsNoTracking()
+                from m in dbContext.UserMessages.AsNoTracking()
                 join u in dbContext.Users.AsNoTracking()
                     on m.UserId equals u.Id
                 select new { u.UserPrincipalName, m.GraphId, m.Id }
             ).ToListAsync(cancellationToken);
         
-        var attachments = new List<MessageAttachment>();
+        var attachments = new List<UserMessageAttachment>();
         foreach (var message in msgByUser)
         {
              try
             {
                 // 2) Fetch the attachments metadata
                 var resp = await graph
-                    .Users[message.UserPrincipalName]  
+                    .Users[message.UserPrincipalName]
                     .Messages[message.GraphId]
                     .Attachments
                     .GetAsync(cfg =>
@@ -453,15 +454,18 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                             "isInline",
                             "lastModifiedDateTime"
                         };
-                    }, cancellationToken);
-
+                    }, cancellationToken) ?? new();
+                
+                if(resp.Value is null) continue;
+                    
+                
                 foreach (var a in resp.Value)
                 {
-                    attachments.Add(new MessageAttachment
+                    attachments.Add(new UserMessageAttachment
                     {
                         Id                    = 0,              
                         MessageId             = message.Id,    
-                        GraphId               = a.Id,
+                        GraphId               = a.Id!,
                         Name                  = a.Name!,
                         ContentType           = a.ContentType!,
                         Size                  = a.Size ?? 0,
@@ -491,12 +495,12 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         {
             UpdateByProperties = [
             
-                nameof(MessageAttachment.Id),
-                nameof(MessageAttachment.MessageId)
+                nameof(UserMessageAttachment.Id),
+                nameof(UserMessageAttachment.MessageId)
             ],
             PropertiesToExcludeOnUpdate = [
-                nameof(MessageAttachment.Id),
-                nameof(MessageAttachment.MessageId)
+                nameof(UserMessageAttachment.Id),
+                nameof(UserMessageAttachment.MessageId)
             ],
             SetOutputIdentity   = false,
             PreserveInsertOrder = false,

@@ -12,8 +12,7 @@ public static class DataflowPipeline
         Func<List<TInput>, CancellationToken, Task<List<TProcessed>>> processBatchAsync,
         Func<List<TProcessed>, CancellationToken, Task> persistBatchAsync,
         Func<TInput, long> keySelector,
-        int fetchPageSize     = 100,
-        int groupSize         = 1,           
+        int groupBatches   = 1,           
         int maxDegreeOfParall = 1,
         CancellationToken cancellationToken = default
     )
@@ -29,9 +28,9 @@ public static class DataflowPipeline
             });
 
         ISourceBlock<List<TProcessed>> afterGrouping = scanBlock;
-        if (groupSize > 1)
+        if (groupBatches > 1)
         {
-            var batchBlock = new BatchBlock<List<TProcessed>>(groupSize);
+            var batchBlock = new BatchBlock<List<TProcessed>>(groupBatches);
             var flatten = new TransformBlock<List<TProcessed>[], List<TProcessed>>(arrays =>
                 arrays.SelectMany(inner => inner).ToList(),
             new ExecutionDataflowBlockOptions
