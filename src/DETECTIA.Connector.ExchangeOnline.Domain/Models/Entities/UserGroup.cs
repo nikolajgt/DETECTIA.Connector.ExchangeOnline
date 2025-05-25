@@ -9,7 +9,7 @@ public record UserGroup
 {
     [Key]
     public long Id { get; init; }
-    public string GraphId { get; set; }
+    public required string GraphId { get; set; }
     public string DisplayName { get; set; }
     public string Description { get; set; }
     public string Mail { get; set; }

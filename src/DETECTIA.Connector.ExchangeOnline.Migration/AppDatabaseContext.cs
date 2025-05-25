@@ -15,7 +15,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
 
     public DbSet<ExchangeSyncState> SyncStates { get; init; }
     public DbSet<CalenderEvent> CalenderEvents { get; init; }
-    public DbSet<EventParticipent> EventParticipant { get; init; }
+    public DbSet<EventParticipant> EventParticipant { get; init; }
 
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)

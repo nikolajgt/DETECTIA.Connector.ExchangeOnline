@@ -116,8 +116,8 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
             
             await dbContext.BulkInsertOrUpdateAsync(users, new BulkConfig
             {
-                UpdateByProperties = ["Id"],
-                PropertiesToExcludeOnUpdate = ["Id", "CreatedDateTime"],
+                UpdateByProperties = [nameof(User.Id)],
+                PropertiesToExcludeOnUpdate = [nameof(User.Id), nameof(User.CreatedAt)],
                 SetOutputIdentity = false,
                 PreserveInsertOrder = false,
                 BatchSize = 500
@@ -495,8 +495,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
         {
             UpdateByProperties = [
             
-                nameof(UserMessageAttachment.Id),
-                nameof(UserMessageAttachment.MessageId)
+                nameof(UserMessageAttachment.GraphId)
             ],
             PropertiesToExcludeOnUpdate = [
                 nameof(UserMessageAttachment.Id),

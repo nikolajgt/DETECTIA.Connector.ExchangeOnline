@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Azure.Identity;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Options;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using DETECTIA.ContentSearch;
 using DETECTIA.ContentSearch.Application;
@@ -89,7 +90,8 @@ public static class ConfigureServices
         services.AddTransient<ISearchTextService, SearchTextService>();
         services.AddContentSearch(regexPatterns);
         services.AddTransient<SyncMetadata>();
-        services.AddTransient<ContentScan>();
+        services.AddTransient<MessageScan>();
+        services.AddTransient<MessageAttachmentScan>();
         return services;
     }
 }

@@ -1,8 +1,12 @@
-﻿namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
 
-public record EventParticipent
-{                                 
+public record EventParticipant
+{                      
+    [Key]
+    public required long            Id               { get; init; }
     public required long            EventId          { get; set; }
     public required CalenderEvent   GraphEvent       { get; set; }
 
