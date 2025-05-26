@@ -21,6 +21,8 @@ public class UserEventsSync(
     {
         try
         {
+            var now = DateTime.UtcNow;
+            var weekAgo = now.AddDays(-7);
             await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
             var users = await dbContext.Users.ToListAsync(cancellationToken);
             
@@ -33,23 +35,28 @@ public class UserEventsSync(
                 try
                 {
                     // base delta builder for this user's events
-                    var baseBuilder = graph
+                    var builder = graph
                         .Users[user.UserPrincipalName]
+                        .Calendar
                         .Events
                         .Delta;
 
                     // if we've stored a previous deltaLink, resume from there
-                    var builder = string.IsNullOrEmpty(user.EventsDeltaLink)
-                        ? baseBuilder
-                        : baseBuilder.WithUrl(user.EventsDeltaLink);
+                    if (!string.IsNullOrEmpty(user.EventsDeltaLink))
+                        builder = builder.WithUrl(user.EventsDeltaLink);
 
                     string? nextLink  = null;
                     string? deltaLink = null;
 
+                    var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
+                    {
+                        cfg.QueryParameters.StartDateTime = weekAgo.ToString("o");    // ISO 8601, e.g. 2025-05-19T16:03:49Z
+                        cfg.QueryParameters.EndDateTime   = now.ToString("o");        // e.g. 2025-05-26T16:03:49Z
+                    }, cancellationToken);
                     do
                     {
                         // fetch one "page" of changes
-                        var resp = await builder.GetAsDeltaGetResponseAsync(cancellationToken: cancellationToken);
+ 
 
                         if (resp?.Value != null)
                         {
@@ -77,6 +84,7 @@ public class UserEventsSync(
                                     Importance = e.Importance?.ToString()!,
                                     Categories = e.Categories?.ToList() ?? []
                                 };
+                                
                                 var participants = e.Attendees?
                                     .Where(att => !string.IsNullOrEmpty(att.EmailAddress.Address))
                                     .Where(att => userByUpn.ContainsKey(att.EmailAddress.Address))

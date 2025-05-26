@@ -80,7 +80,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
 
             b.HasOne(e => e.Organizer)
                 .WithMany(u => u.OrganizedEvents)
-                .HasForeignKey(e => e.UserOrganizerId)
+                .HasForeignKey(e => e.OrganizerId)
                 // don’t cascade-delete organizer → events
                 .OnDelete(DeleteBehavior.Restrict);
         });

@@ -19,15 +19,15 @@ public class Worker(
     {
         try
         {
-            await sync.SyncUsersAsync(stoppingToken);
-            await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
-            await sync.SyncUsersFoldersAsync(stoppingToken);
-            await sync.SyncAllUsersMessagesAsync(stoppingToken);
-            await sync.SyncAllUsersMessageAttachmentsAsync(stoppingToken);
+            //await sync.SyncUsersAsync(stoppingToken);
+            //await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
+            //await sync.SyncUsersFoldersAsync(stoppingToken);
+            //await sync.SyncAllUsersMessagesAsync(stoppingToken);
+            //await sync.SyncAllUsersMessageAttachmentsAsync(stoppingToken);
             await sync2.SyncUsersEventsAsync(stoppingToken);
 
-            await messageScan.ScanEmailTextAsync(stoppingToken);
-            await attachmentScan.ScanEmailAttachmentsAsync(stoppingToken);
+            //await messageScan.ScanEmailTextAsync(stoppingToken);
+            //await attachmentScan.ScanEmailAttachmentsAsync(stoppingToken);
         }
         catch (Exception e)
         {
