@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using Task = System.Threading.Tasks.Task;
 using User = DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
@@ -392,7 +393,7 @@ public class SyncMetadata(ILogger<SyncMetadata> logger, GraphServiceClient graph
                     } while (nextMsgLink != null);
 
                     folder.MessagesDeltaLink = newMsgDelta;
-                    dbContext.MailFolders.Update(folder);
+                    dbContext.UserMailFolders.Update(folder);
                 }
                 catch (ODataError ex) when (ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase))
                 {

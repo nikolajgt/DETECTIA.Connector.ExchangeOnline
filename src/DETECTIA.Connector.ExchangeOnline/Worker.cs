@@ -1,5 +1,6 @@
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.Sync;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Graph;
@@ -10,7 +11,8 @@ public class Worker(
     ILogger<Worker> logger,
     SyncMetadata sync,
     MessageScan messageScan,
-    MessageAttachmentScan attachmentScan) : BackgroundService
+    MessageAttachmentScan attachmentScan,
+    UserEventsSync sync2) : BackgroundService
 {
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -22,6 +24,7 @@ public class Worker(
             await sync.SyncUsersFoldersAsync(stoppingToken);
             await sync.SyncAllUsersMessagesAsync(stoppingToken);
             await sync.SyncAllUsersMessageAttachmentsAsync(stoppingToken);
+            await sync2.SyncUsersEventsAsync(stoppingToken);
 
             await messageScan.ScanEmailTextAsync(stoppingToken);
             await attachmentScan.ScanEmailAttachmentsAsync(stoppingToken);

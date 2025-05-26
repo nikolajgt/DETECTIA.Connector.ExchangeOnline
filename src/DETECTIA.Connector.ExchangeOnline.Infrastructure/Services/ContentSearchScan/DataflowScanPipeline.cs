@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks.Dataflow;
 using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+using Task = System.Threading.Tasks.Task;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 

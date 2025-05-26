@@ -5,6 +5,7 @@ using Azure.Identity;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Options;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.Sync;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using DETECTIA.ContentSearch;
 using DETECTIA.ContentSearch.Application;
@@ -88,6 +89,7 @@ public static class ConfigureServices
         
         
         services.AddTransient<ISearchTextService, SearchTextService>();
+        services.AddTransient<UserEventsSync>();
         services.AddContentSearch(regexPatterns);
         services.AddTransient<SyncMetadata>();
         services.AddTransient<MessageScan>();

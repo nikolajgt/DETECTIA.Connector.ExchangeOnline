@@ -6,13 +6,14 @@ namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 public record EventParticipant
 {                      
     [Key]
-    public required long            Id               { get; init; }
-    public required long            EventId          { get; set; }
-    public required CalenderEvent   GraphEvent       { get; set; }
+    public long            Id               { get; init; }
+    
+    public long            EventId          { get; set; }
+    public Event?          Event            { get; set; }
 
-    public required int             UserId           { get; set; }
-    public required User            User             { get; set; }
+    public long            UserId           { get; set; }
+    public User?           User             { get; set; }
 
-    public required string          Type             { get; set; }          
-    public required string          StatusResponse   { get; set; } 
+    public string          Type             { get; set; }          
+    public string          StatusResponse   { get; set; } 
 }

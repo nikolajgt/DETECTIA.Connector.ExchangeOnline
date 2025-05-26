@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models.ODataErrors;
+using Task = System.Threading.Tasks.Task;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
 

@@ -16,8 +16,4 @@
       <ProjectReference Include="..\DETECTIA.Connector.ExchangeOnline.Domain\DETECTIA.Connector.ExchangeOnline.Domain.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Migrations\" />
-    </ItemGroup>
-
 </Project>

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
 [Index(nameof(GraphId))]
-public record GraphTask
+public record Task
 {
     [Key]
     public long                        Id                 { get; init; }
