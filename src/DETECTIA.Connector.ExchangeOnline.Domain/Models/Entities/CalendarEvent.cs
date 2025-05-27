@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
+[Index(nameof(GraphId))]
 public record CalendarEvent
 {
     [Key]
@@ -20,5 +22,10 @@ public record CalendarEvent
     public string? Importance { get; set; }
     public List<string> Categories { get; set; } = [];
     
-    public List<EventParticipant>? Attendees { get; set; }
+    public required bool HasBeenScanned      { get; set; }
+    public bool? IsSensitive { get; set; }
+    public DateTimeOffset? ScannedAt                   { get; set; }
+
+    public List<EventAttachment>? Attachments { get; set; } = [];
+    public List<EventParticipant>? Attendees { get; set; } = [];
 }

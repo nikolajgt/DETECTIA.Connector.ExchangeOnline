@@ -12,12 +12,15 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     public DbSet<UserMailboxSettings> UserMailboxSettings { get; init; }
     public DbSet<UserMessage> UserMessages { get; init; }
     public DbSet<UserMessageAttachment> MessageAttachments { get; init; }
-    public DbSet<Match> Matches { get; init; }
+    public DbSet<MailMatch> MailMatches { get; init; }
+    public DbSet<TaskMatch> TaskMatches { get; init; }
     public DbSet<ExchangeSyncState> SyncStates { get; init; }
     
     public DbSet<CalendarEvent> Events { get; init; }
+    public DbSet<EventAttachment> EventAttachments { get; init; }
     public DbSet<EventParticipant> EventParticipants { get; init; }
-    
+    public DbSet<EventMatch> EventMatches { get; init; }
+
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

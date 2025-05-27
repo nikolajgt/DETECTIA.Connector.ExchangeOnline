@@ -9,19 +9,16 @@ using Microsoft.Graph.Models.ODataErrors;
 using Task = System.Threading.Tasks.Task;
 using User = DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User;
 
-namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.Sync;
+namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Sync;
 
-public class UserEventsSync(
-    ILogger<SyncMetadata> logger, 
-    GraphServiceClient graph, 
-    IDbContextFactory<AppDatabaseContext> dbFactory)
+public partial class SyncUsersEvents
 {
     private const int PersistThreshold = 1000;
     public async Task SyncUsersEventsAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var now = DateTime.UtcNow;
+            var now = DateTime.UtcNow.AddDays(200);
             var weekAgo = now.AddDays(-1000);
             await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
             var users = await dbContext.Users.ToListAsync(cancellationToken);
@@ -39,7 +36,7 @@ public class UserEventsSync(
                     if (!string.IsNullOrEmpty(user.EventsDeltaLink))
                         builder = builder.WithUrl(user.EventsDeltaLink);
 
-                    
+   
                     // if we've stored a previous deltaLink, resume from there
                     if (!string.IsNullOrEmpty(user.EventsDeltaLink))
                         builder = builder.WithUrl(user.EventsDeltaLink);
@@ -53,7 +50,8 @@ public class UserEventsSync(
                         var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
                         {
                             cfg.QueryParameters.StartDateTime = weekAgo.ToString("o");    
-                            cfg.QueryParameters.EndDateTime   = now.ToString("o");        
+                            cfg.QueryParameters.EndDateTime   = now.ToString("o");     
+                            cfg.Headers.Add("Prefer", "odata.maxpagesize=100");
                         }, cancellationToken);
                         
                         if (resp?.Value != null)
@@ -82,7 +80,8 @@ public class UserEventsSync(
                                     ShowAs = e.ShowAs?.ToString()!,
                                     BodyContentType = e.Body?.ContentType?.ToString()!,
                                     Importance = e.Importance?.ToString()!,
-                                    Categories = e.Categories?.ToList() ?? []
+                                    Categories = e.Categories?.ToList() ?? [],
+                                    HasBeenScanned = false
                                 };
 
                                 if (e.Attendees is { Count: > 0 })
@@ -135,7 +134,7 @@ public class UserEventsSync(
                     } while (nextLink != null);
 
                     // store the new deltaLink for next time
-                //    user.EventsDeltaLink = deltaLink;
+                    user.EventsDeltaLink = deltaLink;
                 }
                 catch (ODataError ex) when (
                     ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase) ||
@@ -150,6 +149,7 @@ public class UserEventsSync(
             }
 
             await FlushAsync(dbContext, allEvents, allEventParticipants, cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception e)
         {

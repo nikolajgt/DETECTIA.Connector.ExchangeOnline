@@ -1,4 +1,5 @@
 ﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using DETECTIA.ContentSearch.Application;
 using EFCore.BulkExtensions;
@@ -8,41 +9,40 @@ using Microsoft.Graph;
 using Microsoft.Graph.Models.ODataErrors;
 using Task = System.Threading.Tasks.Task;
 
-namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
+namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Scan;
 
-public class MessageScan(
+public partial class UserEventsScan(
+    ILogger<UserEventsScan> logger, 
     IContentSearch contentSearch, 
-    ILogger<MessageScan> logger, 
     GraphServiceClient graph, 
     IDbContextFactory<AppDatabaseContext> dbFactory)
 {
-    private record MessageBatch
+    private record EventBatch
     {
         internal int BatchNumber { get; init; }
         internal int TotalBatchCount { get; init; }
-        internal required UserMessage Entity { get; init; }
+        internal required CalendarEvent Entity { get; init; }
         internal required string UserPrincipalName { get; init; }
     }
     
-    public async Task ScanEmailTextAsync(CancellationToken cancellationToken)
+    public async Task ScanEventsAsync(CancellationToken cancellationToken)
     {
         var batchSize = 100;
         var maxDegree = Environment.ProcessorCount;
     
-        await DataflowPipeline.RunAsync<MessageBatch, UserMessage>(
-            // ---- A) fetchPageAsync ----
+        await DataflowPipeline.RunAsync<EventBatch, CalendarEvent>(
             async (lastId, ct) =>
             {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
-                return await ctx.UserMessages
+                return await ctx.Events
                     .AsNoTracking()
                     .Where(m => !m.HasBeenScanned && m.Id > lastId)
                     .OrderBy(m => m.Id)
-                    .Include(m => m.User)
-                    .Select(m => new MessageBatch
+                    .Include(m => m.Organizer)
+                    .Select(e => new EventBatch
                     {
-                        Entity            = m,
-                        UserPrincipalName= m.User!.UserPrincipalName!
+                        Entity            = e,
+                        UserPrincipalName= e.Organizer!.UserPrincipalName!
                     })
                     .Take(batchSize)
                     .ToListAsync(ct);
@@ -50,7 +50,7 @@ public class MessageScan(
     
             async (batch, ct) =>
             {
-                var matches = new List<Match>();
+                var matches = new List<EventMatch>();
                 foreach (var item in batch)
                 {
                     try
@@ -67,7 +67,7 @@ public class MessageScan(
                         if(string.IsNullOrWhiteSpace(body)) continue;
                         var resp = await contentSearch.MatchAsync(body);
                         var convertedMatches = resp.Response.Matches.GroupBy(obj => new { obj.Name, obj.Pattern })
-                            .Select(group => new Match
+                            .Select(group => new EventMatch
                             {
                                 Name = group.Key.Name,
                                 Pattern = group.Key.Pattern,
@@ -87,7 +87,7 @@ public class MessageScan(
                     }
                 }
 
-                return new DataflowPipeline.PipelineScanProcess<UserMessage>
+                return new DataflowPipeline.PipelineScanProcess<CalendarEvent>
                 {
                     Entities = batch.Select(x => x.Entity).ToList(),
                     Matches = matches

@@ -2,10 +2,12 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Azure.Identity;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Scan;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Sync;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Scan;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Sync;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Options;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.Sync;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using DETECTIA.ContentSearch;
 using DETECTIA.ContentSearch.Application;
@@ -89,11 +91,13 @@ public static class ConfigureServices
         
         
         services.AddTransient<ISearchTextService, SearchTextService>();
-        services.AddTransient<UserEventsSync>();
         services.AddContentSearch(regexPatterns);
-        services.AddTransient<SyncMetadata>();
-        services.AddTransient<MessageScan>();
-        services.AddTransient<MessageAttachmentScan>();
+        
+        services.AddTransient<SyncUsersEvents>();
+        services.AddTransient<SyncUsersMailbox>();
+        services.AddTransient<ScanUsersEvents>();
+        services.AddTransient<ScanUsersMailbox>();
+
         return services;
     }
 }

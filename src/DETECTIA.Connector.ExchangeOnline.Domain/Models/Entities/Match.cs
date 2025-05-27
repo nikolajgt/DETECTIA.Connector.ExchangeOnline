@@ -2,7 +2,13 @@
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
-public record Match
+public record MailMatch : Match;
+
+public record EventMatch : Match;
+
+public record TaskMatch : Match;
+
+public abstract record Match
 {
     [Key]
     public long Id                                    { get; init; }
@@ -16,3 +22,5 @@ public record Match
     public long?   AttachmentId                        { get; set; }
     public UserMessageAttachment? Attachment          { get; set; }
 }
+
+

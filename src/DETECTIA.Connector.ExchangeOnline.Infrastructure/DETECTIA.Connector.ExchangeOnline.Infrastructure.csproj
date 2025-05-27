@@ -24,4 +24,8 @@
       <ProjectReference Include="..\DETECTIA.Connector.ExchangeOnline.Migration\DETECTIA.Connector.ExchangeOnline.Migration.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Users\" />
+    </ItemGroup>
+
 </Project>

@@ -1,6 +1,6 @@
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.GraphEvents;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.Sync;
 
 namespace DETECTIA.Connector.ExchangeOnline;
 
@@ -9,6 +9,7 @@ public class Worker(
     SyncMetadata sync,
     MessageScan messageScan,
     MessageAttachmentScan attachmentScan,
+    UserEventsAttachmentsSync attachmentsSync,
     UserEventsSync sync2) : BackgroundService
 {
 
@@ -16,15 +17,16 @@ public class Worker(
     {
         try
         {
-            //await sync.SyncUsersAsync(stoppingToken);
-            //await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
-            //await sync.SyncUsersFoldersAsync(stoppingToken);
-            //await sync.SyncAllUsersMessagesAsync(stoppingToken);
-            //await sync.SyncAllUsersMessageAttachmentsAsync(stoppingToken);
+            await sync.SyncUsersAsync(stoppingToken);
+            await sync.SyncUsersMailboxSettingsAsync(stoppingToken);
+            await sync.SyncUsersFoldersAsync(stoppingToken);
+            await sync.SyncAllUsersMessagesAsync(stoppingToken);
+            await sync.SyncAllUsersMessageAttachmentsAsync(stoppingToken);
             await sync2.SyncUsersEventsAsync(stoppingToken);
-
+            await attachmentsSync.SyncAttachmentsAsync(stoppingToken);
             //await messageScan.ScanEmailTextAsync(stoppingToken);
             //await attachmentScan.ScanEmailAttachmentsAsync(stoppingToken);
+            logger.LogInformation("Finished");
         }
         catch (Exception e)
         {
