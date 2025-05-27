@@ -9,7 +9,7 @@ public record EventParticipant
     public long            Id               { get; init; }
     
     public long            EventId          { get; set; }
-    public Event?          Event            { get; set; }
+    public CalendarEvent?          Event            { get; set; }
 
     public long            UserId           { get; set; }
     public User?           User             { get; set; }

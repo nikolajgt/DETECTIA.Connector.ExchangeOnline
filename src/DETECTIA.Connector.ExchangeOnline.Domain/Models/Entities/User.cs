@@ -45,7 +45,7 @@ public record User
     public List<UserMailFolder>? MailboxFolders              { get; init; }
     public List<UserGroup>? Groups                           { get; init; }
     public List<EventParticipant>? InvitedEvents             { get; init; }
-    public List<Event>? OrganizedEvents                      { get; init; }
+    public List<CalendarEvent>? OrganizedEvents                      { get; init; }
     public string? FoldersDeltaLink                          { get; set; }
     public string? EventsDeltaLink                           { get; set; }
 }

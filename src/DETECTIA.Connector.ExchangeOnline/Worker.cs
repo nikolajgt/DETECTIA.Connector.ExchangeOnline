@@ -1,9 +1,6 @@
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.ContentSearchScan;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services.Sync;
-using DETECTIA.Connector.ExchangeOnline.Migration;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Graph;
 
 namespace DETECTIA.Connector.ExchangeOnline;
 

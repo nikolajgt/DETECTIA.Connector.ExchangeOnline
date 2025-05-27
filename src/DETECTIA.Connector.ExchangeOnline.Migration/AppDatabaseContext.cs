@@ -15,7 +15,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     public DbSet<Match> Matches { get; init; }
     public DbSet<ExchangeSyncState> SyncStates { get; init; }
     
-    public DbSet<Event> Events { get; init; }
+    public DbSet<CalendarEvent> Events { get; init; }
     public DbSet<EventParticipant> EventParticipants { get; init; }
     
     
@@ -73,7 +73,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
         });
         
         // 1) Event → Organizer (one-to-many)
-        modelBuilder.Entity<Event>(b =>
+        modelBuilder.Entity<CalendarEvent>(b =>
         {
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();

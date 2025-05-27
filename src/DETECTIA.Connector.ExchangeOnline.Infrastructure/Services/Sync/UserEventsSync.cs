@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
-using Event = DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.Event;
 using Task = System.Threading.Tasks.Task;
 using User = DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User;
 
@@ -17,18 +16,16 @@ public class UserEventsSync(
     GraphServiceClient graph, 
     IDbContextFactory<AppDatabaseContext> dbFactory)
 {
+    private const int PersistThreshold = 1000;
     public async Task SyncUsersEventsAsync(CancellationToken cancellationToken)
     {
         try
         {
             var now = DateTime.UtcNow;
-            var weekAgo = now.AddDays(-7);
+            var weekAgo = now.AddDays(-1000);
             await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
             var users = await dbContext.Users.ToListAsync(cancellationToken);
-            
-            var userByUpn = users
-                .ToDictionary(u => u.UserPrincipalName!, StringComparer.OrdinalIgnoreCase);
-            var allEvents = new List<Event>();
+            var allEvents = new List<CalendarEvent>();
             var allEventParticipants = new List<EventParticipant>();
             foreach (var user in users)
             {
@@ -37,10 +34,12 @@ public class UserEventsSync(
                     // base delta builder for this user's events
                     var builder = graph
                         .Users[user.UserPrincipalName]
-                        .Calendar
-                        .Events
+                        .CalendarView
                         .Delta;
+                    if (!string.IsNullOrEmpty(user.EventsDeltaLink))
+                        builder = builder.WithUrl(user.EventsDeltaLink);
 
+                    
                     // if we've stored a previous deltaLink, resume from there
                     if (!string.IsNullOrEmpty(user.EventsDeltaLink))
                         builder = builder.WithUrl(user.EventsDeltaLink);
@@ -48,28 +47,29 @@ public class UserEventsSync(
                     string? nextLink  = null;
                     string? deltaLink = null;
 
-                    var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
-                    {
-                        cfg.QueryParameters.StartDateTime = weekAgo.ToString("o");    // ISO 8601, e.g. 2025-05-19T16:03:49Z
-                        cfg.QueryParameters.EndDateTime   = now.ToString("o");        // e.g. 2025-05-26T16:03:49Z
-                    }, cancellationToken);
                     do
                     {
                         // fetch one "page" of changes
- 
-
+                        var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
+                        {
+                            cfg.QueryParameters.StartDateTime = weekAgo.ToString("o");    
+                            cfg.QueryParameters.EndDateTime   = now.ToString("o");        
+                        }, cancellationToken);
+                        
                         if (resp?.Value != null)
                         {
                             foreach (var e in resp.Value)
                             {
                                 // skip deletions
                                 if (e.AdditionalData?.ContainsKey("@removed") == true)
+                                {
                                     continue;
+                                }
 
                                 var startOffset = ToDateTimeOffset(e.Start);
                                 var endOffset = ToDateTimeOffset(e.End);
 
-                                var @event = new Event
+                                var @event = new CalendarEvent
                                 {
                                     GraphId = e.Id!,
                                     Subject = e.Subject!,
@@ -77,28 +77,52 @@ public class UserEventsSync(
                                     End = endOffset,
                                     LocationDisplayName = e.Location?.DisplayName!,
                                     IsAllDay = e.IsAllDay,
+                                    OrganizerId = user.Id,
                                     IsCancelled = e.IsCancelled,
                                     ShowAs = e.ShowAs?.ToString()!,
                                     BodyContentType = e.Body?.ContentType?.ToString()!,
-                                    Organizer = user,
                                     Importance = e.Importance?.ToString()!,
                                     Categories = e.Categories?.ToList() ?? []
                                 };
-                                
-                                var participants = e.Attendees?
-                                    .Where(att => !string.IsNullOrEmpty(att.EmailAddress.Address))
-                                    .Where(att => userByUpn.ContainsKey(att.EmailAddress.Address))
-                                    .Select(att => new EventParticipant
-                                    {
-                                        Event = @event,
-                                        User       = user,
-                                        Type       = att.Type!.ToString(),
-                                        StatusResponse = att.Status!.ToString(),
-                                    }).ToList() ?? [];
-                                    
 
+                                if (e.Attendees is { Count: > 0 })
+                                {
+                                    // Extract emails from attendees
+                                    var attendeeEmails = e.Attendees
+                                        .Select(x => x.EmailAddress?.Address)
+                                        .Where(x => !string.IsNullOrEmpty(x))
+                                        .Distinct()
+                                        .ToList();
+
+                                    // Lookup users by Mail
+                                    var userIdByMail = await dbContext.Users
+                                        .AsNoTracking()
+                                        .Where(u => attendeeEmails.Contains(u.Mail!))
+                                        .ToDictionaryAsync(u => u.Mail!, u => u.Id, cancellationToken);
+
+                                    // Build EventParticipant list (only for users found)
+                                    var participants = e.Attendees
+                                        .Where(att => 
+                                            !string.IsNullOrEmpty(att?.EmailAddress?.Address) &&
+                                            userIdByMail.ContainsKey(att.EmailAddress.Address))
+                                        .Select(att => new EventParticipant
+                                        {
+                                            UserId = userIdByMail[att.EmailAddress!.Address!],
+                                            Event = @event,
+                                            Type = att.Type?.ToString() ?? "Unknown",
+                                            StatusResponse = att.Status?.Response?.ToString() ?? "Unknown"
+                                        })
+                                        .ToList();
+
+                                    allEventParticipants.AddRange(participants);
+                                }
+                               
                                 allEvents.Add(@event);
-                                allEventParticipants.AddRange(participants);
+                                
+                                if (allEvents.Count > PersistThreshold || allEventParticipants.Count > PersistThreshold)
+                                {
+                                    await FlushAsync(dbContext, allEvents, allEventParticipants, cancellationToken);
+                                }
                             }
                         }
 
@@ -111,7 +135,7 @@ public class UserEventsSync(
                     } while (nextLink != null);
 
                     // store the new deltaLink for next time
-                    user.EventsDeltaLink = deltaLink;
+                //    user.EventsDeltaLink = deltaLink;
                 }
                 catch (ODataError ex) when (
                     ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase) ||
@@ -125,21 +149,73 @@ public class UserEventsSync(
                 }
             }
 
-            await dbContext.BulkInsertOrUpdateAsync(allEvents, new BulkConfig
-            {
-                UpdateByProperties             = [nameof(Event.GraphId) ],
-                PropertiesToExcludeOnUpdate    = [nameof(Event.GraphId), nameof(Event.Id)] ,
-                SetOutputIdentity              = false,
-                PreserveInsertOrder            = false,
-                BatchSize                      = 500
-            }, cancellationToken: cancellationToken);
-
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await FlushAsync(dbContext, allEvents, allEventParticipants, cancellationToken);
         }
         catch (Exception e)
         {
             logger.LogError(e, e.Message);
             throw;
+        }
+    }
+    
+    private async Task FlushAsync(
+        AppDatabaseContext dbContext,
+        List<CalendarEvent> allEvents, 
+        List<EventParticipant> allEventParticipants, 
+        CancellationToken cancellationToken)
+    {
+        if (allEvents.Count > 0)
+        {
+            await dbContext.BulkInsertOrUpdateAsync(allEvents, new BulkConfig
+            {
+                UpdateByProperties             = [nameof(CalendarEvent.GraphId) ],
+                PropertiesToExcludeOnUpdate    = [nameof(CalendarEvent.GraphId), nameof(CalendarEvent.Id)] ,
+                SetOutputIdentity              = false,
+                PreserveInsertOrder            = false,
+                BatchSize                      = 500
+            }, cancellationToken: cancellationToken);
+            
+            await GetEventIdLookupAsync(dbContext, allEvents,  allEventParticipants,cancellationToken);
+            await dbContext.BulkInsertOrUpdateAsync(allEventParticipants, new BulkConfig
+            {
+                UpdateByProperties             = [nameof(EventParticipant.EventId), nameof(EventParticipant.UserId) ],
+                PropertiesToExcludeOnUpdate    = [nameof(EventParticipant.EventId), nameof(EventParticipant.UserId) ],
+                SetOutputIdentity              = false,
+                PreserveInsertOrder            = false,
+                BatchSize                      = PersistThreshold
+            }, cancellationToken: cancellationToken);
+
+            allEvents.Clear();
+            allEventParticipants.Clear();
+        }
+    }
+    
+    private async Task GetEventIdLookupAsync(
+        AppDatabaseContext dbContext, 
+        List<CalendarEvent> allEvents,
+        List<EventParticipant> allEventParticipants, 
+        CancellationToken cancellationToken)
+    {
+        var lookup = allEvents.Select(x => x!.GraphId);
+        var response = await dbContext.Events
+            .AsNoTracking()
+            .Where(e => lookup.Contains(e.GraphId))
+            .ToDictionaryAsync(e => e.GraphId, e => e.Id, cancellationToken: cancellationToken);
+        
+        foreach (var participant in allEventParticipants)
+        {
+            var graphId = participant.Event?.GraphId;
+
+            if (graphId != null && response.TryGetValue(graphId, out var dbEventId))
+            {
+                participant.EventId = dbEventId;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Event ID not found for GraphId: {graphId}");
+            }
+
+            participant.Event = null;
         }
     }
 

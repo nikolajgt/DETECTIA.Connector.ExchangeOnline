@@ -2,7 +2,7 @@
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
-public record Event
+public record CalendarEvent
 {
     [Key]
     public long Id { get; init; }
