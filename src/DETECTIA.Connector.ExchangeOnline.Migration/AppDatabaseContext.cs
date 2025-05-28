@@ -59,7 +59,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
         });
-        modelBuilder.Entity<UserMessageAttachment>(b =>
+        modelBuilder.Entity<MessageAttachment>(b =>
         {
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
