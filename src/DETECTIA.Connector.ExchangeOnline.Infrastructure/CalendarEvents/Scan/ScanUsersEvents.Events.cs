@@ -11,11 +11,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Scan;
 
-public partial class UserEventsScan(
-    ILogger<UserEventsScan> logger, 
-    IContentSearch contentSearch, 
-    GraphServiceClient graph, 
-    IDbContextFactory<AppDatabaseContext> dbFactory)
+public partial class ScanUsersEvents
 {
     private record EventBatch
     {
@@ -25,7 +21,7 @@ public partial class UserEventsScan(
         internal required string UserPrincipalName { get; init; }
     }
     
-    public async Task ScanEventsAsync(CancellationToken cancellationToken)
+    public async Task ScanEventsTextAsync(CancellationToken cancellationToken)
     {
         var batchSize = 100;
         var maxDegree = Environment.ProcessorCount;
@@ -72,7 +68,7 @@ public partial class UserEventsScan(
                                 Name = group.Key.Name,
                                 Pattern = group.Key.Pattern,
                                 MatchCount = group.Count(),
-                                MessageId = item.Entity.Id
+                                EventId  = item.Entity.Id
                             }).ToList();
                         matches.AddRange(convertedMatches);
                         item.Entity.IsSensitive = resp.Response.IsSensitive;
@@ -115,9 +111,9 @@ public partial class UserEventsScan(
                 {
                     await db.BulkInsertOrUpdateAsync(messages.Matches, new BulkConfig
                     {
-                        UpdateByProperties          = [nameof(Match.MessageId), nameof(Match.Pattern)],
+                        UpdateByProperties          = [nameof(EventMatch.EventId), nameof(EventMatch.Pattern)],
                         PropertiesToExcludeOnUpdate = [
-                            nameof(Match.AttachmentId)
+                            nameof(EventMatch.AttachmentId)
                         ],
                         BatchSize = batchSize
                     }, cancellationToken: ct);

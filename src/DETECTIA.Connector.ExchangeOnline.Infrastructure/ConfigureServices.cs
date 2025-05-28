@@ -8,6 +8,7 @@ using DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Scan;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Sync;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Options;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Users;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using DETECTIA.ContentSearch;
 using DETECTIA.ContentSearch.Application;
@@ -83,20 +84,21 @@ public static class ConfigureServices
             var adapter = new HttpClientRequestAdapter(authProvider, httpClient: httpClient);
             return new GraphServiceClient(adapter);
         });
+        
         var regexPatterns = configuration
             .GetSection("ContentSearch:RegexPattern")
             .Get<List<string>>()!
             .Select(x => new Regex(x))
             .ToList();
         
-        
         services.AddTransient<ISearchTextService, SearchTextService>();
         services.AddContentSearch(regexPatterns);
         
-        services.AddTransient<SyncUsersEvents>();
-        services.AddTransient<SyncUsersMailbox>();
-        services.AddTransient<ScanUsersEvents>();
-        services.AddTransient<ScanUsersMailbox>();
+        services.AddTransient<SyncUsers>()
+                .AddTransient<SyncUsersEvents>()
+                .AddTransient<SyncUsersMailbox>()
+                .AddTransient<ScanUsersEvents>()
+                .AddTransient<ScanUsersMailbox>();
 
         return services;
     }

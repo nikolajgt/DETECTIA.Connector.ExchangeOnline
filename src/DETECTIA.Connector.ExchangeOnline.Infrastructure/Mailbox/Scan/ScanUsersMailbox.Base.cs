@@ -12,5 +12,9 @@ public partial class ScanUsersMailbox(
     GraphServiceClient graph,
     IDbContextFactory<AppDatabaseContext> dbFactory)
 {
-
+    public async Task ScanAsync(CancellationToken cancellationToken)
+    {
+        await ScanUsersMessageTextAsync(cancellationToken);
+        await ScanUsersMessageAttachmentsAsync(cancellationToken);
+    }
 }

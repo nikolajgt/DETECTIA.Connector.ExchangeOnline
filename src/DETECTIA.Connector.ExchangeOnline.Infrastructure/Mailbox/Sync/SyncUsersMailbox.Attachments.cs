@@ -20,7 +20,7 @@ public partial class SyncUsersMailbox
                 select new { u.UserPrincipalName, m.GraphId, m.Id }
             ).ToListAsync(cancellationToken);
         
-        var attachments = new List<UserMessageAttachment>();
+        var attachments = new List<MessageAttachment>();
         foreach (var message in msgByUser)
         {
             try
@@ -48,7 +48,7 @@ public partial class SyncUsersMailbox
                 
                 foreach (var a in resp.Value)
                 {
-                    attachments.Add(new UserMessageAttachment
+                    attachments.Add(new MessageAttachment
                     {
                         Id                    = 0,              
                         MessageId             = message.Id,    
@@ -82,11 +82,11 @@ public partial class SyncUsersMailbox
         {
             UpdateByProperties = [
             
-                nameof(UserMessageAttachment.GraphId)
+                nameof(MessageAttachment.GraphId)
             ],
             PropertiesToExcludeOnUpdate = [
-                nameof(UserMessageAttachment.Id),
-                nameof(UserMessageAttachment.MessageId)
+                nameof(MessageAttachment.Id),
+                nameof(MessageAttachment.MessageId)
             ],
             SetOutputIdentity   = false,
             PreserveInsertOrder = false,

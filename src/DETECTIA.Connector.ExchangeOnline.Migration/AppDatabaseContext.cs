@@ -5,21 +5,29 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration;
 
 public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : DbContext(options)
 {
+    // Users
     public DbSet<User> Users { get; init; }  
     public DbSet<UserGroup> UserGroups { get; init; }
     
+    // Mailbox
     public DbSet<UserMailFolder> UserMailFolders { get; init; } 
     public DbSet<UserMailboxSettings> UserMailboxSettings { get; init; }
     public DbSet<UserMessage> UserMessages { get; init; }
-    public DbSet<UserMessageAttachment> MessageAttachments { get; init; }
-    public DbSet<MailMatch> MailMatches { get; init; }
-    public DbSet<TaskMatch> TaskMatches { get; init; }
-    public DbSet<ExchangeSyncState> SyncStates { get; init; }
+    public DbSet<MessageAttachment> MessageAttachments { get; init; }
+    public DbSet<MessageMatch> MailMatches { get; init; }
     
+    
+    // Tasks
+    public DbSet<TaskMatch> TaskMatches { get; init; }
+    
+    // Events
     public DbSet<CalendarEvent> Events { get; init; }
     public DbSet<EventAttachment> EventAttachments { get; init; }
     public DbSet<EventParticipant> EventParticipants { get; init; }
     public DbSet<EventMatch> EventMatches { get; init; }
+    
+    // Other
+    public DbSet<ExchangeSyncState> SyncStates { get; init; }
 
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)

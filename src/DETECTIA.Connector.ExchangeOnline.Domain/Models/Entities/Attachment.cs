@@ -2,15 +2,17 @@
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
-public record MailAttachment : Attachment
+public record MessageAttachment : Attachment
 {
-    public required long MailId { get; init; }
-    public List<MailMatch>? Matches { get; init; }
+    public required long MessageId { get; init; }
+    public UserMessage? Message { get; init; }
+    public List<MessageMatch>? Matches { get; init; }
 }
 
 public record EventAttachment : Attachment
 {
     public required long EventId { get; init; }
+    public CalendarEvent? Event { get; init; }
     public List<EventMatch>? Matches { get; init; }
 }
 

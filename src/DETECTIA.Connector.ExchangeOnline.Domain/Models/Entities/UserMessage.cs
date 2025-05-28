@@ -23,7 +23,9 @@ public record UserMessage
     public DateTimeOffset? ScannedAt                   { get; set; }
 
     public List<Match>? Matches                        { get; init; } = [];
-    public List<UserMessageAttachment>? Attachments    { get; init; } = [];
+    public List<MessageAttachment>? Attachments        { get; init; } = [];
+    
+    
     [ForeignKey(nameof(UserId))]
     public User? User                                  { get; init; }  
 }
