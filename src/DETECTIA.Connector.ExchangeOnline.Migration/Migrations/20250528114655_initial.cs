@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 {
     /// <inheritdoc />
-    public partial class events_participents : Microsoft.EntityFrameworkCore.Migrations.Migration
+    public partial class initial : Microsoft.EntityFrameworkCore.Migrations.Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -95,25 +95,28 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    GraphId = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Subject = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    GraphId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    Subject = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Start = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     End = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
-                    LocationDisplayName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LocationDisplayName = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsAllDay = table.Column<bool>(type: "bit", nullable: true),
                     IsCancelled = table.Column<bool>(type: "bit", nullable: true),
-                    ShowAs = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    BodyContentType = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    UserOrganizerId = table.Column<long>(type: "bigint", nullable: false),
-                    Importance = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Categories = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    ShowAs = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    BodyContentType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    OrganizerId = table.Column<long>(type: "bigint", nullable: false),
+                    Importance = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Categories = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    HasBeenScanned = table.Column<bool>(type: "bit", nullable: false),
+                    IsSensitive = table.Column<bool>(type: "bit", nullable: true),
+                    ScannedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Events", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Events_Users_UserOrganizerId",
-                        column: x => x.UserOrganizerId,
+                        name: "FK_Events_Users_OrganizerId",
+                        column: x => x.OrganizerId,
                         principalSchema: "DETECTIA",
                         principalTable: "Users",
                         principalColumn: "Id",
@@ -210,6 +213,37 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "EventAttachments",
+                schema: "DETECTIA",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EventId = table.Column<long>(type: "bigint", nullable: false),
+                    GraphId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    ContentType = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Size = table.Column<int>(type: "int", nullable: true),
+                    IsInline = table.Column<bool>(type: "bit", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    HasBeenScanned = table.Column<bool>(type: "bit", nullable: false),
+                    IsSensitive = table.Column<bool>(type: "bit", nullable: true),
+                    ScannedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EventAttachments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EventAttachments_Events_EventId",
+                        column: x => x.EventId,
+                        principalSchema: "DETECTIA",
+                        principalTable: "Events",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "EventParticipants",
                 schema: "DETECTIA",
                 columns: table => new
@@ -287,15 +321,15 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     MessageId = table.Column<long>(type: "bigint", nullable: false),
-                    GraphId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    GraphId = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     ContentType = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Size = table.Column<int>(type: "int", nullable: false),
+                    Size = table.Column<int>(type: "int", nullable: true),
                     IsInline = table.Column<bool>(type: "bit", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     HasBeenScanned = table.Column<bool>(type: "bit", nullable: false),
                     IsSensitive = table.Column<bool>(type: "bit", nullable: true),
-                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
                     ScannedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true)
                 },
                 constraints: table =>
@@ -311,7 +345,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Matches",
+                name: "Match",
                 schema: "DETECTIA",
                 columns: table => new
                 {
@@ -320,20 +354,35 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Pattern = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     MatchCount = table.Column<int>(type: "int", nullable: false),
+                    Discriminator = table.Column<string>(type: "nvarchar(13)", maxLength: 13, nullable: false),
+                    EventId = table.Column<long>(type: "bigint", nullable: true),
+                    AttachmentId = table.Column<long>(type: "bigint", nullable: true),
                     MessageId = table.Column<long>(type: "bigint", nullable: true),
-                    AttachmentId = table.Column<long>(type: "bigint", nullable: true)
+                    MessageMatch_AttachmentId = table.Column<long>(type: "bigint", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Matches", x => x.Id);
+                    table.PrimaryKey("PK_Match", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Matches_MessageAttachments_AttachmentId",
+                        name: "FK_Match_EventAttachments_AttachmentId",
                         column: x => x.AttachmentId,
+                        principalSchema: "DETECTIA",
+                        principalTable: "EventAttachments",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Match_Events_EventId",
+                        column: x => x.EventId,
+                        principalSchema: "DETECTIA",
+                        principalTable: "Events",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_Match_MessageAttachments_MessageMatch_AttachmentId",
+                        column: x => x.MessageMatch_AttachmentId,
                         principalSchema: "DETECTIA",
                         principalTable: "MessageAttachments",
                         principalColumn: "Id");
                     table.ForeignKey(
-                        name: "FK_Matches_UserMessages_MessageId",
+                        name: "FK_Match_UserMessages_MessageId",
                         column: x => x.MessageId,
                         principalSchema: "DETECTIA",
                         principalTable: "UserMessages",
@@ -341,10 +390,16 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_EventParticipants_EventId",
+                name: "IX_EventAttachments_EventId",
+                schema: "DETECTIA",
+                table: "EventAttachments",
+                column: "EventId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EventParticipants_EventId_UserId",
                 schema: "DETECTIA",
                 table: "EventParticipants",
-                column: "EventId");
+                columns: new[] { "EventId", "UserId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_EventParticipants_UserId",
@@ -353,28 +408,40 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Events_UserOrganizerId",
+                name: "IX_Events_GraphId",
                 schema: "DETECTIA",
                 table: "Events",
-                column: "UserOrganizerId");
+                column: "GraphId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Matches_AttachmentId",
+                name: "IX_Events_OrganizerId",
                 schema: "DETECTIA",
-                table: "Matches",
+                table: "Events",
+                column: "OrganizerId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Match_AttachmentId",
+                schema: "DETECTIA",
+                table: "Match",
                 column: "AttachmentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Matches_MessageId",
+                name: "IX_Match_EventId",
                 schema: "DETECTIA",
-                table: "Matches",
+                table: "Match",
+                column: "EventId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Match_MessageId",
+                schema: "DETECTIA",
+                table: "Match",
                 column: "MessageId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_MessageAttachments_GraphId",
+                name: "IX_Match_MessageMatch_AttachmentId",
                 schema: "DETECTIA",
-                table: "MessageAttachments",
-                column: "GraphId");
+                table: "Match",
+                column: "MessageMatch_AttachmentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_MessageAttachments_MessageId",
@@ -452,7 +519,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 schema: "DETECTIA");
 
             migrationBuilder.DropTable(
-                name: "Matches",
+                name: "Match",
                 schema: "DETECTIA");
 
             migrationBuilder.DropTable(
@@ -468,7 +535,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 schema: "DETECTIA");
 
             migrationBuilder.DropTable(
-                name: "Events",
+                name: "EventAttachments",
                 schema: "DETECTIA");
 
             migrationBuilder.DropTable(
@@ -477,6 +544,10 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
             migrationBuilder.DropTable(
                 name: "UserGroups",
+                schema: "DETECTIA");
+
+            migrationBuilder.DropTable(
+                name: "Events",
                 schema: "DETECTIA");
 
             migrationBuilder.DropTable(

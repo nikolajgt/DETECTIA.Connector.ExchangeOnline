@@ -14,7 +14,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     public DbSet<UserMailboxSettings> UserMailboxSettings { get; init; }
     public DbSet<UserMessage> UserMessages { get; init; }
     public DbSet<MessageAttachment> MessageAttachments { get; init; }
-    public DbSet<MessageMatch> MailMatches { get; init; }
+    public DbSet<MessageMatch> MessageMatches { get; init; }
     
     
     // Tasks
@@ -33,8 +33,23 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
         modelBuilder.HasDefaultSchema("DETECTIA");
+
+        modelBuilder.Entity<Match>()
+            .ToTable("Match")
+            .HasDiscriminator<string>("Discriminator")
+            .HasValue<MessageMatch>("MessageMatch")
+            .HasValue<EventMatch>("EventMatch")
+            .HasValue<TaskMatch>("TaskMatch");
+        
+        modelBuilder.Entity<MessageMatch>()
+            .Property(mm => mm.AttachmentId)
+            .HasColumnName("MessageAttachmentId");
+
+        modelBuilder.Entity<EventMatch>()
+            .Property(em => em.AttachmentId)
+            .HasColumnName("EventAttachmentId");
+        
         modelBuilder.Entity<UserMailboxSettings>(b =>
         {
             b.HasKey(e => e.Id);
@@ -113,6 +128,12 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
                 .HasForeignKey(ep => ep.UserId)
                 // prevent deleting a user from cascading into EventParticipant
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+        
+        modelBuilder.Entity<UserGroupMembership>(b =>
+        {
+            b.HasKey(e => e.Id);
+            b.Property(e => e.Id).ValueGeneratedOnAdd();
         });
     }
     

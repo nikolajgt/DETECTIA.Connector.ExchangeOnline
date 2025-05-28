@@ -95,9 +95,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long?>("CalendarEventId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -136,7 +133,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CalendarEventId");
+                    b.HasIndex("EventId");
 
                     b.ToTable("EventAttachments", "DETECTIA");
                 });
@@ -203,9 +200,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<long?>("AttachmentId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Discriminator")
                         .IsRequired()
                         .HasMaxLength(13)
@@ -214,28 +208,74 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<int>("MatchCount")
                         .HasColumnType("int");
 
-                    b.Property<long?>("MessageId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Pattern")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AttachmentId");
-
-                    b.HasIndex("MessageId");
+                    b.HasIndex("Pattern");
 
                     b.ToTable("Match", "DETECTIA");
 
                     b.HasDiscriminator().HasValue("Match");
 
                     b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MessageAttachment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("GraphId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("HasBeenScanned")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsInline")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsSensitive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset?>("ScannedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int?>("Size")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.ToTable("MessageAttachments", "DETECTIA");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", b =>
@@ -374,6 +414,29 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.HasIndex("GraphId");
 
                     b.ToTable("UserGroups", "DETECTIA");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroupMembership", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserGroupMembership", "DETECTIA");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
@@ -537,91 +600,40 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.ToTable("UserMessages", "DETECTIA");
                 });
 
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachment", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("GraphId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<bool>("HasBeenScanned")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsInline")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("IsSensitive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTimeOffset?>("LastModifiedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<long>("MessageId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTimeOffset?>("ScannedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<int>("Size")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GraphId");
-
-                    b.HasIndex("MessageId");
-
-                    b.ToTable("MessageAttachments", "DETECTIA");
-                });
-
-            modelBuilder.Entity("UserUserGroup", b =>
-                {
-                    b.Property<long>("GroupsId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("UsersId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("GroupsId", "UsersId");
-
-                    b.HasIndex("UsersId");
-
-                    b.ToTable("UserUserGroup", "DETECTIA");
-                });
-
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventMatch", b =>
                 {
                     b.HasBaseType("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.Match");
 
-                    b.Property<long?>("EventAttachmentId")
+                    b.Property<long?>("AttachmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("EventAttachmentId");
+
+                    b.Property<long?>("EventId")
                         .HasColumnType("bigint");
 
-                    b.HasIndex("EventAttachmentId");
+                    b.HasIndex("AttachmentId");
+
+                    b.HasIndex("EventId");
 
                     b.HasDiscriminator().HasValue("EventMatch");
                 });
 
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MailMatch", b =>
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MessageMatch", b =>
                 {
                     b.HasBaseType("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.Match");
 
-                    b.HasDiscriminator().HasValue("MailMatch");
+                    b.Property<long?>("AttachmentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("MessageAttachmentId");
+
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("bigint");
+
+                    b.HasIndex("AttachmentId");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasDiscriminator().HasValue("MessageMatch");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.TaskMatch", b =>
@@ -644,9 +656,13 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventAttachment", b =>
                 {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.CalendarEvent", null)
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.CalendarEvent", "Event")
                         .WithMany("Attachments")
-                        .HasForeignKey("CalendarEventId");
+                        .HasForeignKey("EventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Event");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventParticipant", b =>
@@ -668,19 +684,34 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.Match", b =>
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MessageAttachment", b =>
                 {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachment", "Attachment")
-                        .WithMany("Matches")
-                        .HasForeignKey("AttachmentId");
-
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", "Message")
-                        .WithMany("Matches")
-                        .HasForeignKey("MessageId");
-
-                    b.Navigation("Attachment");
+                        .WithMany("Attachments")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroupMembership", b =>
+                {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroup", "Group")
+                        .WithMany("Users")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
+                        .WithMany("GroupMemberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
@@ -718,37 +749,34 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachment", b =>
-                {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", "Message")
-                        .WithMany("Attachments")
-                        .HasForeignKey("MessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Message");
-                });
-
-            modelBuilder.Entity("UserUserGroup", b =>
-                {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroup", null)
-                        .WithMany()
-                        .HasForeignKey("GroupsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UsersId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventMatch", b =>
                 {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventAttachment", null)
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventAttachment", "Attachment")
                         .WithMany("Matches")
-                        .HasForeignKey("EventAttachmentId");
+                        .HasForeignKey("AttachmentId");
+
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.CalendarEvent", "Event")
+                        .WithMany()
+                        .HasForeignKey("EventId");
+
+                    b.Navigation("Attachment");
+
+                    b.Navigation("Event");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MessageMatch", b =>
+                {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MessageAttachment", "Attachment")
+                        .WithMany("Matches")
+                        .HasForeignKey("AttachmentId");
+
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", "Message")
+                        .WithMany("Matches")
+                        .HasForeignKey("MessageId");
+
+                    b.Navigation("Attachment");
+
+                    b.Navigation("Message");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.CalendarEvent", b =>
@@ -763,8 +791,15 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Navigation("Matches");
                 });
 
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.MessageAttachment", b =>
+                {
+                    b.Navigation("Matches");
+                });
+
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", b =>
                 {
+                    b.Navigation("GroupMemberships");
+
                     b.Navigation("InvitedEvents");
 
                     b.Navigation("MailboxFolders");
@@ -772,6 +807,11 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Navigation("OrganizedEvents");
 
                     b.Navigation("UserMailboxSettings");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroup", b =>
+                {
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
@@ -783,11 +823,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                 {
                     b.Navigation("Attachments");
 
-                    b.Navigation("Matches");
-                });
-
-            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessageAttachment", b =>
-                {
                     b.Navigation("Matches");
                 });
 #pragma warning restore 612, 618

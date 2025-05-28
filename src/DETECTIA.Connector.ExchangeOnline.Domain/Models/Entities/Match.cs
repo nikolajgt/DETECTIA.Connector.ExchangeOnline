@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
 
@@ -25,6 +26,7 @@ public record TaskMatch : Match
     
 }
 
+[Index(nameof(Pattern))]
 public abstract record Match
 {
     [Key]

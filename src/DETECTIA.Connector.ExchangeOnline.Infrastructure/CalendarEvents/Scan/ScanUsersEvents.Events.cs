@@ -26,7 +26,7 @@ public partial class ScanUsersEvents
         var batchSize = 100;
         var maxDegree = Environment.ProcessorCount;
     
-        await DataflowPipeline.RunAsync<EventBatch, CalendarEvent>(
+        await DataflowPipeline.RunAsync<EventBatch, CalendarEvent, EventMatch>(
             async (lastId, ct) =>
             {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
@@ -82,12 +82,10 @@ public partial class ScanUsersEvents
                         );
                     }
                 }
-
-                return new DataflowPipeline.PipelineScanProcess<CalendarEvent>
-                {
-                    Entities = batch.Select(x => x.Entity).ToList(),
-                    Matches = matches
-                };
+    
+                return new DataflowPipeline.PipelineScanProcess<CalendarEvent, EventMatch>(
+                    batch.Select(x => x.Entity).ToList(),
+                    matches);
             },
     
             async (messages, ct) =>
@@ -111,7 +109,7 @@ public partial class ScanUsersEvents
                 {
                     await db.BulkInsertOrUpdateAsync(messages.Matches, new BulkConfig
                     {
-                        UpdateByProperties          = [nameof(EventMatch.EventId), nameof(EventMatch.Pattern)],
+                        UpdateByProperties          = [nameof(EventMatch.EventId), nameof(EventMatch.AttachmentId), nameof(EventMatch.Pattern)],
                         PropertiesToExcludeOnUpdate = [
                             nameof(EventMatch.AttachmentId)
                         ],

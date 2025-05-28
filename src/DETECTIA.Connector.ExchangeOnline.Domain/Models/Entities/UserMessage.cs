@@ -22,7 +22,7 @@ public record UserMessage
     public bool? IsSensitive                           { get; set; }
     public DateTimeOffset? ScannedAt                   { get; set; }
 
-    public List<Match>? Matches                        { get; init; } = [];
+    public List<MessageMatch>? Matches                 { get; init; } = [];
     public List<MessageAttachment>? Attachments        { get; init; } = [];
     
     

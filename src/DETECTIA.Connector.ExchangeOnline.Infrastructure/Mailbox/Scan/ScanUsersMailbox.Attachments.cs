@@ -25,7 +25,7 @@ public partial class ScanUsersMailbox
     {
         var batchSize = 10;
         
-        await DataflowPipeline.RunAsync<AttachmentBatch, MessageAttachment>(
+        await DataflowPipeline.RunAsync<AttachmentBatch, MessageAttachment, MessageMatch>(
             async (lastId, ct) => {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
                 return await ctx.MessageAttachments
@@ -45,7 +45,7 @@ public partial class ScanUsersMailbox
 
             async (batch, ct) => {
                 var batchNumber = batch.First().BatchNumber;
-                var matches = new List<Match>();
+                var matches = new List<MessageMatch>();
                 foreach (var item in batch)
                 {
                     try
@@ -78,11 +78,9 @@ public partial class ScanUsersMailbox
                     }
                 }
                 logger.LogInformation("Finished scanning batch {}", batchNumber);
-                return new DataflowPipeline.PipelineScanProcess<MessageAttachment>
-                {
-                    Entities = batch.Select(x => x.Entity).ToList(),
-                    Matches = matches
-                };
+                return new DataflowPipeline.PipelineScanProcess<MessageAttachment, MessageMatch>(
+                    batch.Select(x => x.Entity).ToList(), 
+                    matches);
             },
 
             async (attachments, ct) => {
@@ -105,7 +103,7 @@ public partial class ScanUsersMailbox
                 {
                     await db.BulkInsertOrUpdateAsync(attachments.Matches, new BulkConfig
                     {
-                        UpdateByProperties          = [nameof(MessageMatch.AttachmentId), nameof(MessageMatch.Pattern)],
+                        UpdateByProperties          = [nameof(MessageMatch.AttachmentId), nameof(MessageMatch.MessageId), nameof(MessageMatch.Pattern)],
                         PropertiesToExcludeOnUpdate = [
                             nameof(MessageMatch.MessageId)
                         ],

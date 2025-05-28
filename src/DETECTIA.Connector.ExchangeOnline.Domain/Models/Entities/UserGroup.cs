@@ -20,5 +20,5 @@ public record UserGroup
     public DateTimeOffset? CreatedDateTime { get; set; }
     public string Visibility { get; set; } // Public, Private, HiddenMembership
     
-    public List<User>? Users { get; set; }
+    public List<UserGroupMembership>? Users { get; set; }
 }

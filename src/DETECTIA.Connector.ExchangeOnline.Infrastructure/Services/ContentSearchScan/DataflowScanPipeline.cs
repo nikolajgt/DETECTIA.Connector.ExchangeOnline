@@ -8,26 +8,26 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 
 public static class DataflowPipeline
 {
-    public record PipelineScanProcess<T> 
+    public record PipelineScanProcess<TEntity, TMatch>(IEnumerable<TEntity> Entities, IEnumerable<TMatch> Matches)
+        where TMatch : Match
     {
-        public required IEnumerable<T> Entities { get; init; } = [];
-        public required IEnumerable<Match> Matches { get; init; } = [];
+
     }
     
     /// <summary>
     /// Runs a three-stage dataflow: Fetch → Process → (Group →) Persist.
     /// </summary>
-    public static async Task RunAsync<TInput, TProcessed>(
+    public static async Task RunAsync<TInput, TEntity, TMatch>(
         Func<long, CancellationToken, Task<List<TInput>?>> fetchPageAsync,
-        Func<List<TInput>, CancellationToken, Task<PipelineScanProcess<TProcessed>>> processBatchAsync,
-        Func<PipelineScanProcess<TProcessed>, CancellationToken, Task> persistBatchAsync,
+        Func<List<TInput>, CancellationToken, Task<PipelineScanProcess<TEntity, TMatch>>> processBatchAsync,
+        Func<PipelineScanProcess<TEntity, TMatch>, CancellationToken, Task> persistBatchAsync,
         Func<TInput, long> keySelector,
         int groupBatches   = 1,           
         int maxDegreeOfParall = 1,
         CancellationToken cancellationToken = default
-    )
+    ) where TMatch : Match
     {
-        var scanBlock = new TransformBlock<List<TInput>, PipelineScanProcess<TProcessed>>(async batch
+        var scanBlock = new TransformBlock<List<TInput>, PipelineScanProcess<TEntity, TMatch>>(async batch
                 => await processBatchAsync(batch, cancellationToken),
             new ExecutionDataflowBlockOptions
             {
@@ -37,21 +37,17 @@ public static class DataflowPipeline
                 EnsureOrdered          = false
             });
 
-        ISourceBlock<PipelineScanProcess<TProcessed>> afterGrouping = scanBlock;
+        ISourceBlock<PipelineScanProcess<TEntity, TMatch>> afterGrouping = scanBlock;
         if (groupBatches > 1)
         {
-            var batchBlock = new BatchBlock<PipelineScanProcess<TProcessed>>(groupBatches);
+            var batchBlock = new BatchBlock<PipelineScanProcess<TEntity, TMatch>>(groupBatches);
             var flatten =
-                new TransformBlock<PipelineScanProcess<TProcessed>[], PipelineScanProcess<TProcessed>>(
+                new TransformBlock<PipelineScanProcess<TEntity, TMatch>[], PipelineScanProcess<TEntity, TMatch>>(
                     arrays =>
                     {
                         var allEntities = arrays.SelectMany(x => x.Entities);
                         var allMatches  = arrays.SelectMany(x => x.Matches);
-                        return new PipelineScanProcess<TProcessed>
-                        {
-                            Entities = allEntities,
-                            Matches  = allMatches
-                        };
+                        return new PipelineScanProcess<TEntity, TMatch>(allEntities, allMatches);
                     },
                     new ExecutionDataflowBlockOptions
                     {
@@ -64,7 +60,7 @@ public static class DataflowPipeline
             afterGrouping = flatten;
         }
 
-        var persistBlock = new ActionBlock<PipelineScanProcess<TProcessed>>(async batch =>
+        var persistBlock = new ActionBlock<PipelineScanProcess<TEntity, TMatch>>(async batch =>
         {
             await persistBatchAsync(batch, cancellationToken);
         },

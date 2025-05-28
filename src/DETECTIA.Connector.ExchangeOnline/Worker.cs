@@ -21,6 +21,7 @@ public class Worker(
         {
             // users
             await syncUsers.SyncUsersAsync(stoppingToken);
+            await syncUsers.SyncGroupsAsync(stoppingToken);
             
             // users mailbox
             await syncMailbox.SyncUsersMailboxSettingsAsync(stoppingToken);
