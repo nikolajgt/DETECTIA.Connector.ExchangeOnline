@@ -20,19 +20,19 @@ public class Worker(
         try
         {
             // users
-            await syncUsers.SyncUsersAsync(stoppingToken);
-            await syncUsers.SyncGroupsAsync(stoppingToken);
-            // // users mailbox
-            await syncMailbox.SyncUsersMailboxSettingsAsync(stoppingToken);
-            await syncMailbox.SyncUsersMailboxFoldersAsync(stoppingToken);
-            await syncMailbox.SyncUsersMessagesAsync(stoppingToken);
-            await syncMailbox.SyncUsersMessageAttachmentsAsync(stoppingToken);
-            await scanMailbox.ScanUsersMessageTextAsync(stoppingToken);
-            await scanMailbox.ScanUsersMessageAttachmentsAsync(stoppingToken);
+            // await syncUsers.SyncUsersAsync(stoppingToken);
+            // await syncUsers.SyncGroupsAsync(stoppingToken);
+            // users mailbox
+            // await syncMailbox.SyncUsersMailboxSettingsAsync(stoppingToken);
+            // await syncMailbox.SyncUsersMailboxFoldersAsync(stoppingToken);
+            // await syncMailbox.SyncUsersMessagesAsync(stoppingToken);
+            // await syncMailbox.SyncUsersMessageAttachmentsAsync(stoppingToken);
+            // await scanMailbox.ScanUsersMessageTextAsync(stoppingToken);
+            // await scanMailbox.ScanUsersMessageAttachmentsAsync(stoppingToken);
             
             // users calendar events
             await syncEvents.SyncUsersEventsAsync(stoppingToken);
-            await syncEvents.SyncAttachmentsAsync(stoppingToken);
+            await syncEvents.SyncCalendarEventAttachmentsAsync(stoppingToken);
             await scanEvents.ScanEventsTextAsync(stoppingToken);
             await scanEvents.ScanEventAttachmentsAsync(stoppingToken);
             

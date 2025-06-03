@@ -1,6 +1,6 @@
 ﻿using System.Text;
 using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -23,7 +23,7 @@ public partial class ScanUsersMailbox
     
     public async Task ScanUsersMessageAttachmentsAsync(CancellationToken cancellationToken)
     {
-        var batchSize = 10;
+        var batchSize = 500;
         
         await DataflowScanPipeline.RunAsync<AttachmentBatch, MessageAttachment, MessageMatch>(
             async (lastId, ct) => {
@@ -114,7 +114,6 @@ public partial class ScanUsersMailbox
 
             // 4) keySelector
             x => x.Entity.Id,
-
             groupBatches:         2,       
             maxDegreeOfParall: Environment.ProcessorCount,
             cancellationToken: cancellationToken

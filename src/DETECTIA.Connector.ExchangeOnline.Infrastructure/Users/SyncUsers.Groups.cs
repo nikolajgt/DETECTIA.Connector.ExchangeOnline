@@ -25,7 +25,7 @@ public partial class SyncUsers
             }
 
             var baseBuilder = graph.Groups.Delta;
-            var builder = string.IsNullOrEmpty(state.DeltaLink)
+            var builder = string.IsNullOrEmpty(state!.DeltaLink)
                 ? baseBuilder
                 : baseBuilder.WithUrl(state.DeltaLink);
 
@@ -51,7 +51,7 @@ public partial class SyncUsers
                     };
                     cfg.QueryParameters.Top = 100;
                 }, cancellationToken);
-
+                if(resp?.Value is null) continue;
                 foreach (var g in resp.Value)
                 {
                     if (g.AdditionalData?.ContainsKey("@removed") == true)

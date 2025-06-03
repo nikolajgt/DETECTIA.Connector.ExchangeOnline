@@ -1,6 +1,6 @@
 ﻿using System.Text;
 using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -35,7 +35,7 @@ public partial class ScanUsersEvents
                     .Where(m => !m.HasBeenScanned && m.Id > lastId)
                     .OrderBy(m => m.Id)
                     .Include(m => m.Event)
-                        .ThenInclude(e => e.Organizer)
+                        .ThenInclude(e => e!.Organizer)
                     .Select(e => new EventAttachmentBatch
                     {
                         Entity            = e,

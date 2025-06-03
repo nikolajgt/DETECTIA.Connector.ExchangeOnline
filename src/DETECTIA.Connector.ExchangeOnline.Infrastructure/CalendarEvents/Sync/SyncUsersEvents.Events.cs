@@ -1,9 +1,9 @@
 using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using Task = System.Threading.Tasks.Task;
@@ -14,7 +14,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Sync;
 public partial class SyncUsersEvents
 {
     private const int PersistThreshold = 1000;
-    public async Task SyncUsersEventsAsync(CancellationToken cancellationToken)
+    public async Task SyncUsersEventsAsync2(CancellationToken cancellationToken)
     {
         try
         {
@@ -157,6 +157,126 @@ public partial class SyncUsersEvents
             throw;
         }
     }
+    
+    public async Task SyncUsersEventsAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow.AddDays(200);
+        var weekAgo = now.AddDays(-1000);
+
+        await DataflowSyncPipeline.RunAsync<User, CalendarEvent, User>(
+            fetchPageAsync: async (lastUserId, ct) =>
+            {
+                await using var dbContext = await dbFactory.CreateDbContextAsync(ct);
+                return await dbContext.Users
+                    .AsNoTracking()
+                    .Where(u => u.Id > lastUserId)
+                    .OrderBy(u => u.Id)
+                    .Take(100)
+                    .ToListAsync(ct);
+            },
+            expandAsync: async (user, ct) =>
+            {
+                try
+                {
+                    var builder = graph.Users[user.UserPrincipalName].CalendarView.Delta;
+                    if (!string.IsNullOrEmpty(user.EventsDeltaLink))
+                        builder = builder.WithUrl(user.EventsDeltaLink);
+
+                    string? nextLink = null;
+                    string? deltaLink = null;
+                    
+                    var calendarEvents = new List<CalendarEvent>();
+                    do
+                    {
+                        var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
+                        {
+                            cfg.QueryParameters.StartDateTime = weekAgo.ToString("o");
+                            cfg.QueryParameters.EndDateTime = now.ToString("o");
+                            cfg.Headers.Add("Prefer", "odata.maxpagesize=100");
+                        }, ct);
+
+                        if (resp?.Value is not null)
+                        {
+                            foreach (var e in resp.Value)
+                            {
+                                if (e.AdditionalData?.ContainsKey("@removed") == true)
+                                    continue;
+
+                                var @event = new CalendarEvent
+                                {
+                                    GraphId            = e.Id!,
+                                    Subject            = e.Subject!,
+                                    Start              = ToDateTimeOffset(e.Start),
+                                    End                = ToDateTimeOffset(e.End),
+                                    LocationDisplayName = e.Location?.DisplayName!,
+                                    IsAllDay           = e.IsAllDay,
+                                    OrganizerId        = user.Id,
+                                    IsCancelled        = e.IsCancelled,
+                                    ShowAs             = e.ShowAs?.ToString()!,
+                                    BodyContentType    = e.Body?.ContentType?.ToString()!,
+                                    Importance         = e.Importance?.ToString()!,
+                                    Categories         = e.Categories?.ToList() ?? [],
+                                    HasBeenScanned     = false
+                                };
+
+                                calendarEvents.Add(@event);
+                            }
+                        }
+
+                        nextLink  = resp?.OdataNextLink;
+                        deltaLink = resp?.OdataDeltaLink;
+
+                        if (nextLink != null)
+                            builder = builder.WithUrl(nextLink);
+
+                    } while (nextLink != null);
+
+                    user.EventsDeltaLink = deltaLink;
+                    return (calendarEvents, user);
+                }
+                catch (ODataError ex) when (
+                    ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("soft-deleted", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("on-premise", StringComparison.OrdinalIgnoreCase))
+                {
+                    logger.LogWarning(
+                        "Skipping event sync for {Upn}: {Error}",
+                        user.UserPrincipalName,
+                        ex.Message);
+                    
+                    return ([], user);
+                }
+            },
+            persistBatchAsync: async (events, users, ct) =>
+            {
+                await using var ctx = await dbFactory.CreateDbContextAsync(ct);
+                // 1. Save calendar events
+                await ctx.BulkInsertOrUpdateAsync(events, new BulkConfig
+                {
+                    UpdateByProperties = [nameof(CalendarEvent.GraphId)],
+                    PropertiesToExcludeOnUpdate = [nameof(CalendarEvent.Id)],
+                    SetOutputIdentity = false,
+                    PreserveInsertOrder = false,
+                    BatchSize = 500
+                }, cancellationToken: ct);
+                
+                // 5. Save updated delta links for users
+                await ctx.BulkInsertOrUpdateAsync(users, new BulkConfig
+                {
+                    UpdateByProperties = [nameof(User.Id)],
+                    PropertiesToInclude = [nameof(User.EventsDeltaLink)],
+                    SetOutputIdentity = false,
+                    PreserveInsertOrder = false,
+                    BatchSize = 100
+                }, cancellationToken: ct);
+            },
+            keySelector: u => u.Id,
+            persistBatchSize: 500,
+            maxDegreeOfParallelism: 4,
+            cancellationToken: cancellationToken
+        );
+    }
+
     
     private async Task FlushAsync(
         AppDatabaseContext dbContext,

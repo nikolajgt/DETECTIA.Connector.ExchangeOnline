@@ -7,7 +7,6 @@ using DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Sync;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Scan;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Sync;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Options;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using DETECTIA.Connector.ExchangeOnline.Infrastructure.Users;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using DETECTIA.ContentSearch;

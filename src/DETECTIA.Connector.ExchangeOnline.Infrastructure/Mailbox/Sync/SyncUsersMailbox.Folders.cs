@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -12,17 +12,14 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Sync;
 
 public partial class SyncUsersMailbox
 {
-    public readonly struct PipelineProcess(IEnumerable<UserMailFolder> Folders, User users);
-
     public async Task SyncUsersMailboxFoldersAsync(CancellationToken cancellationToken)
     {
-        const int batchSize = 500;
-        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
-        var userBag = new ConcurrentQueue<User>();
-        await DataflowSyncPipeline.RunAsync<User, UserMailFolder>(
+        await DataflowSyncPipeline.RunAsync<User, UserMailFolder, User>(
             fetchPageAsync: async (lastUserId, ct) =>
             {
+                await using var dbContext = await dbFactory.CreateDbContextAsync(ct);
                 return await dbContext.Users
+                    .AsNoTracking()
                     .Where(u => u.Id > lastUserId)
                     .OrderBy(u => u.Id)
                     .Take(100)
@@ -103,41 +100,33 @@ public partial class SyncUsersMailbox
 
                     logger.LogWarning("Skipping mailbox folders for {Upn}: {Error}", user.UserPrincipalName, ex.Message);
                 }
-                userBag.Enqueue(user);
-                return userFolders;
+                return (userFolders, user);
             },
-            persistBatchAsync: async (batch, ct) =>
+            persistBatchAsync: async (folders, users, ct) =>
             {
-                await using var ctx = await dbFactory.CreateDbContextAsync(ct);
-                // fx folders reached max batchsize fx 100
-                await ctx.BulkInsertOrUpdateAsync(batch, new BulkConfig
+                await using var dbContext = await dbFactory.CreateDbContextAsync(ct);
+                await dbContext.BulkInsertOrUpdateAsync(folders, new BulkConfig
                 {
                     UpdateByProperties = [nameof(UserMailFolder.GraphId)],
                     PropertiesToExcludeOnUpdate = [nameof(UserMailFolder.Id)],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = batchSize
+                    BatchSize = 500
                 }, cancellationToken: ct);
                 
-                var users = new List<User>();
-                while (userBag.TryDequeue(out var user) && users.Count < batchSize)
-                    users.Add(user);
-                
-                await ctx.BulkInsertOrUpdateAsync(users, new BulkConfig
+                await dbContext.BulkInsertOrUpdateAsync(users, new BulkConfig
                 {
-                    UpdateByProperties = [nameof(User.Id)],
-                    PropertiesToIncludeOnUpdate = [nameof(User.FoldersDeltaLink)],
+                    UpdateByProperties = [nameof(UserMailFolder.GraphId)],
+                    PropertiesToExcludeOnUpdate = [nameof(UserMailFolder.Id)],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = batchSize
+                    BatchSize = 500
                 }, cancellationToken: ct);
             },
             keySelector: u => u.Id,
-            batchSize: 100, // Adjust as needed
+            persistBatchSize: 100, // Adjust as needed
             maxDegreeOfParallelism: 4,
             cancellationToken: cancellationToken
         );
-        
-        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

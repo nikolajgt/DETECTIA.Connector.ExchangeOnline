@@ -1,5 +1,5 @@
 ﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;

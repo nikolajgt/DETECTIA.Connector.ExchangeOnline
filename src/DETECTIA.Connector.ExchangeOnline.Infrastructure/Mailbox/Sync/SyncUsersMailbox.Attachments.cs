@@ -1,5 +1,5 @@
 ﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Task = System.Threading.Tasks.Task;
@@ -11,11 +11,10 @@ public partial class SyncUsersMailbox
     public record MessageInfo(string UserPrincipalName, string GraphId, long MessageId);
     public async Task SyncUsersMessageAttachmentsAsync(CancellationToken cancellationToken)
     {
-        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
         await DataflowSyncPipeline.RunAsync<MessageInfo, MessageAttachment>(
             fetchPageAsync: async (lastKey, ct) =>
             {
-                // Get paged messages from DB
+                await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
                 return await dbContext.UserMessages
                     .AsNoTracking()
                     .Where(m => m.Id > lastKey)
@@ -74,7 +73,7 @@ public partial class SyncUsersMailbox
                 }, cancellationToken: ct);
             },
             keySelector: message => message.MessageId,
-            batchSize: 50,
+            persistBatchSize: 500,
             maxDegreeOfParallelism: 4,
             cancellationToken: cancellationToken
         );

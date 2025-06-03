@@ -1,11 +1,8 @@
 ﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
-using DETECTIA.Connector.ExchangeOnline.Migration;
-using DETECTIA.ContentSearch.Application;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Graph;
 using Microsoft.Graph.Models.ODataErrors;
 using Task = System.Threading.Tasks.Task;
 

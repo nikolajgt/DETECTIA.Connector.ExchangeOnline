@@ -1,4 +1,5 @@
 ﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Pipelines;
 using DETECTIA.Connector.ExchangeOnline.Migration;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
@@ -9,78 +10,71 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Sync;
 
 public partial class SyncUsersEvents
 {
-    public async Task SyncAttachmentsAsync(CancellationToken cancellationToken)
+    public async Task SyncCalendarEventAttachmentsAsync(CancellationToken cancellationToken)
     {
-        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
-
-        var calendarEvents = await dbContext.Events
-            .AsNoTracking()
-            .Where(e => e.HasBeenScanned == false)
-            .Where(e => !string.IsNullOrEmpty(e.GraphId))
-            .Include(e=>e.Organizer)
-            .ToListAsync(cancellationToken);
-
-        var eventAttachments = new List<EventAttachment>();
-
-        foreach (var ev in calendarEvents)
-        {
-            try
+        await DataflowSyncPipeline.RunAsync<CalendarEvent, EventAttachment>(
+            fetchPageAsync: async (lastKey, ct) =>
             {
-                var attachments = await graph.Users[ev.Organizer!.UserPrincipalName]
-                    .Events[ev.GraphId]
-                    .Attachments
-                    .GetAsync(cancellationToken: cancellationToken);
-
-                if (attachments?.Value == null)
-                    continue;
-
-                foreach (var attachment in attachments.Value)
+                await using var dbContext = await dbFactory.CreateDbContextAsync(ct);
+                return await dbContext.Events
+                    .AsNoTracking()
+                    .Where(e => e.Id > lastKey)
+                    .Where(e => !e.HasBeenScanned)
+                    .Where(e => !string.IsNullOrEmpty(e.GraphId))
+                    .Include(e => e.Organizer)
+                    .OrderBy(e => e.Id)
+                    .Take(100)
+                    .ToListAsync(ct);
+            },
+            expandAsync: async (ev, ct) =>
+            {
+                try
                 {
-                    if (attachment is Microsoft.Graph.Models.FileAttachment file)
-                    {
-                        eventAttachments.Add(new EventAttachment
+                    var attachments = await graph.Users[ev.Organizer!.UserPrincipalName]
+                        .Events[ev.GraphId]
+                        .Attachments
+                        .GetAsync(cancellationToken: ct);
+
+                    if (attachments?.Value == null)
+                        return [];
+
+                    return attachments.Value
+                        .OfType<Microsoft.Graph.Models.FileAttachment>()
+                        .Select(att => new EventAttachment
                         {
-                            GraphId = attachment.Id,
-                            Size = attachment.Size,
-                            EventId = ev.Id,
-                            Name = file.Name,
-                            ContentType = file.ContentType,
-                            IsInline = file.IsInline ?? false,
+                            GraphId        = att.Id!,
+                            Size           = att.Size,
+                            EventId        = ev.Id,
+                            Name           = att.Name!,
+                            ContentType    = att.ContentType!,
+                            IsInline       = att.IsInline ?? false,
                             HasBeenScanned = false
-                        });
-                    }
+                        })
+                        .ToList();
                 }
-            }
-            catch (Exception ex)
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to fetch attachments for Event {GraphId}", ev.GraphId);
+                    return [];
+                }
+            },
+            persistBatchAsync: async (batch, ct) =>
             {
-                logger.LogWarning(ex, "Failed to fetch attachments for Event {GraphId}", ev.GraphId);
-            }
-
-            if (eventAttachments.Count < 500) continue;
-            await FlushAsync(dbContext, eventAttachments, cancellationToken);
-            eventAttachments.Clear();
-        }
-
-        await FlushAsync(dbContext, eventAttachments, cancellationToken);
-    }
-    
-    
-    private static async Task FlushAsync(
-        AppDatabaseContext dbContext, 
-        List<EventAttachment> attachments, 
-        CancellationToken cancellationToken)
-    {
-        if (attachments.Count > 0)
-        {
-            await dbContext.BulkInsertOrUpdateAsync(attachments, new BulkConfig
-            {
-                UpdateByProperties             = [nameof(CalendarEvent.GraphId) ],
-                PropertiesToExcludeOnUpdate    = [nameof(CalendarEvent.GraphId), nameof(CalendarEvent.Id)] ,
-                SetOutputIdentity              = false,
-                PreserveInsertOrder            = false,
-                BatchSize                      = 500
-            }, cancellationToken: cancellationToken);
-        }
+                await using var ctx = await dbFactory.CreateDbContextAsync(ct);
+                await ctx.BulkInsertOrUpdateAsync(batch, new BulkConfig
+                {
+                    UpdateByProperties = [nameof(EventAttachment.GraphId)],
+                    PropertiesToExcludeOnUpdate = [nameof(EventAttachment.Id)],
+                    SetOutputIdentity = false,
+                    PreserveInsertOrder = false,
+                    BatchSize = 500
+                }, cancellationToken: ct);
+            },
+            keySelector: e => e.Id,
+            persistBatchSize: 100,
+            maxDegreeOfParallelism: 4,
+            cancellationToken: cancellationToken
+        );
     }
 
 }
