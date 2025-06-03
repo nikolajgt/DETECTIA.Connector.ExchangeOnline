@@ -23,7 +23,7 @@ public partial class ScanUsersMailbox
         var batchSize = 100;
         var maxDegree = Environment.ProcessorCount;
     
-        await DataflowPipeline.RunAsync<MessageBatch, UserMessage, MessageMatch>(
+        await DataflowScanPipeline.RunAsync<MessageBatch, UserMessage, MessageMatch>(
             // ---- A) fetchPageAsync ----
             async (lastId, ct) =>
             {
@@ -81,7 +81,7 @@ public partial class ScanUsersMailbox
                     }
                 }
 
-                return new DataflowPipeline.PipelineScanProcess<UserMessage, MessageMatch>(
+                return new DataflowScanPipeline.PipelineScanProcess<UserMessage, MessageMatch>(
                     batch.Select(x => x.Entity).ToList(), 
                     matches);
             },

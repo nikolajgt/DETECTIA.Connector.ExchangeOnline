@@ -6,13 +6,10 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 
 
 
-public static class DataflowPipeline
+public static class DataflowScanPipeline
 {
     public record PipelineScanProcess<TEntity, TMatch>(IEnumerable<TEntity> Entities, IEnumerable<TMatch> Matches)
-        where TMatch : Match
-    {
-
-    }
+        where TMatch : Match;
     
     /// <summary>
     /// Runs a three-stage dataflow: Fetch → Process → (Group →) Persist.

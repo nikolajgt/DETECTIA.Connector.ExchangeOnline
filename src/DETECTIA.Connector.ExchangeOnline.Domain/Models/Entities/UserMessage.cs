@@ -25,7 +25,9 @@ public record UserMessage
     public List<MessageMatch>? Matches                 { get; init; } = [];
     public List<MessageAttachment>? Attachments        { get; init; } = [];
     
+    [ForeignKey(nameof(FolderId))]
+    public UserMailFolder?         Folder               { get; init; }
     
     [ForeignKey(nameof(UserId))]
-    public User? User                                  { get; init; }  
+    public User?                   User                 { get; init; }  
 }

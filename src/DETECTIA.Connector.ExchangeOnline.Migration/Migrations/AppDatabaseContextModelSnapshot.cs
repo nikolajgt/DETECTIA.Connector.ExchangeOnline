@@ -586,16 +586,13 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<long>("UserId")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("UserMailFolderId")
-                        .HasColumnType("bigint");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("FolderId");
 
                     b.HasIndex("GraphId");
 
                     b.HasIndex("UserId");
-
-                    b.HasIndex("UserMailFolderId");
 
                     b.ToTable("UserMessages", "DETECTIA");
                 });
@@ -719,7 +716,7 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
                         .WithMany("MailboxFolders")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("User");
@@ -736,15 +733,19 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", b =>
                 {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", "Folder")
+                        .WithMany("Messages")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", null)
-                        .WithMany("Messages")
-                        .HasForeignKey("UserMailFolderId");
+                    b.Navigation("Folder");
 
                     b.Navigation("User");
                 });

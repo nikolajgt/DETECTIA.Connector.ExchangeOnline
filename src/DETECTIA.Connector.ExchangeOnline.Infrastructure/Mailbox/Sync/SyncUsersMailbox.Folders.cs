@@ -1,9 +1,9 @@
-﻿using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
-using DETECTIA.Connector.ExchangeOnline.Migration;
+﻿using System.Collections.Concurrent;
+using DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities;
+using DETECTIA.Connector.ExchangeOnline.Infrastructure.Services;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Graph;
 using Microsoft.Graph.Models.ODataErrors;
 using Task = System.Threading.Tasks.Task;
 
@@ -12,30 +12,40 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Sync;
 
 public partial class SyncUsersMailbox
 {
+    public readonly struct PipelineProcess(IEnumerable<UserMailFolder> Folders, User users);
+
     public async Task SyncUsersMailboxFoldersAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
-            var users = await dbContext.Users.ToListAsync(cancellationToken);
-        
-            var usersFolders = new List<UserMailFolder>();
-            foreach (var user in users)
+        const int batchSize = 500;
+        await using var dbContext = await dbFactory.CreateDbContextAsync(cancellationToken);
+        var userBag = new ConcurrentQueue<User>();
+        await DataflowSyncPipeline.RunAsync<User, UserMailFolder>(
+            fetchPageAsync: async (lastUserId, ct) =>
             {
+                return await dbContext.Users
+                    .Where(u => u.Id > lastUserId)
+                    .OrderBy(u => u.Id)
+                    .Take(100)
+                    .ToListAsync(ct);
+            },
+            expandAsync: async (user, ct) =>
+            {
+                var userFolders = new List<UserMailFolder>();
                 try
                 {
                     var baseBuilder = graph.Users[user.UserPrincipalName].MailFolders.Delta;
                     var builder = string.IsNullOrEmpty(user.FoldersDeltaLink)
                         ? baseBuilder
                         : baseBuilder.WithUrl(user.FoldersDeltaLink);
-                    
+
                     string? nextLink = null;
                     string? deltaLink = null;
+
                     do
                     {
-                        var resp = await builder.GetAsDeltaGetResponseAsync(requestConfig =>
+                        var resp = await builder.GetAsDeltaGetResponseAsync(cfg =>
                         {
-                            requestConfig.QueryParameters.Select =
+                            cfg.QueryParameters.Select =
                             [
                                 "id",
                                 "displayName",
@@ -44,19 +54,15 @@ public partial class SyncUsersMailbox
                                 "totalItemCount",
                                 "unreadItemCount"
                             ];
-                        }, cancellationToken);
-                        if(resp is null) continue;
+                        }, ct);
 
-                        if (resp.Value is not null && resp.Value.Count > 0)
+                        if (resp?.Value is not null)
                         {
                             foreach (var f in resp.Value)
                             {
-                                if (f.AdditionalData.TryGetValue("@removed", out _))
+                                if (!f.AdditionalData.TryGetValue("@removed", out _))
                                 {
-                                }
-                                else
-                                {
-                                    var mapped = new UserMailFolder
+                                    userFolders.Add(new UserMailFolder
                                     {
                                         GraphId              = f.Id!,
                                         UserId               = user.Id,
@@ -65,51 +71,73 @@ public partial class SyncUsersMailbox
                                         ChildFolderCount     = f.ChildFolderCount ?? 0,
                                         TotalItemCount       = f.TotalItemCount ?? 0,
                                         UnreadItemCount      = f.UnreadItemCount ?? 0,
-                                        LastModifiedAt = DateTimeOffset.UtcNow,
+                                        LastSyncUtc          = DateTimeOffset.UtcNow,
                                         User                 = user
-                                    };
-
-                                    usersFolders.Add(mapped);
+                                    });
+                                }
+                                else
+                                {
+                                    // deleted
                                 }
                             }
                         }
 
-                        nextLink  = resp.OdataNextLink;
-                        deltaLink = resp.OdataDeltaLink;
+                        nextLink = resp?.OdataNextLink;
+                        deltaLink = resp?.OdataDeltaLink;
 
                         if (nextLink != null)
                             builder = builder.WithUrl(nextLink);
                     }
                     while (nextLink != null);
+
                     user.FoldersDeltaLink = deltaLink;
                 }
                 catch (ODataError ex)
                 {
-                    if (!ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase)
-                        && !ex.Message.Contains("soft-deleted", StringComparison.OrdinalIgnoreCase)
-                        && !ex.Message.Contains("on-premise", StringComparison.OrdinalIgnoreCase)) throw;
-                    
-                    logger.LogWarning(
-                        "Skipping mailboxSettings for {Upn}: {Error}",
-                        user.UserPrincipalName,
-                        ex.Message);
-                    continue;
+                    if (!ex.Message.Contains("inactive", StringComparison.OrdinalIgnoreCase) &&
+                        !ex.Message.Contains("soft-deleted", StringComparison.OrdinalIgnoreCase) &&
+                        !ex.Message.Contains("on-premise", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw;
+                    }
+
+                    logger.LogWarning("Skipping mailbox folders for {Upn}: {Error}", user.UserPrincipalName, ex.Message);
                 }
-            }
-            await dbContext.BulkInsertOrUpdateAsync(usersFolders, new BulkConfig
+                userBag.Enqueue(user);
+                return userFolders;
+            },
+            persistBatchAsync: async (batch, ct) =>
             {
-                UpdateByProperties = [ nameof(UserMailFolder.GraphId) ],
-                PropertiesToExcludeOnUpdate = [ nameof(UserMailFolder.GraphId), nameof(UserMailFolder.Id) ],
-                SetOutputIdentity = false,
-                PreserveInsertOrder = false,
-                BatchSize = 500
-            }, cancellationToken: cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception e)
-        {
-            logger.LogError(e, e.Message);
-            throw;
-        }
+                await using var ctx = await dbFactory.CreateDbContextAsync(ct);
+                // fx folders reached max batchsize fx 100
+                await ctx.BulkInsertOrUpdateAsync(batch, new BulkConfig
+                {
+                    UpdateByProperties = [nameof(UserMailFolder.GraphId)],
+                    PropertiesToExcludeOnUpdate = [nameof(UserMailFolder.Id)],
+                    SetOutputIdentity = false,
+                    PreserveInsertOrder = false,
+                    BatchSize = batchSize
+                }, cancellationToken: ct);
+                
+                var users = new List<User>();
+                while (userBag.TryDequeue(out var user) && users.Count < batchSize)
+                    users.Add(user);
+                
+                await ctx.BulkInsertOrUpdateAsync(users, new BulkConfig
+                {
+                    UpdateByProperties = [nameof(User.Id)],
+                    PropertiesToIncludeOnUpdate = [nameof(User.FoldersDeltaLink)],
+                    SetOutputIdentity = false,
+                    PreserveInsertOrder = false,
+                    BatchSize = batchSize
+                }, cancellationToken: ct);
+            },
+            keySelector: u => u.Id,
+            batchSize: 100, // Adjust as needed
+            maxDegreeOfParallelism: 4,
+            cancellationToken: cancellationToken
+        );
+        
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

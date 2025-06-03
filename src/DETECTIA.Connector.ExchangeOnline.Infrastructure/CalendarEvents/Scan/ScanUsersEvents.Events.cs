@@ -26,7 +26,7 @@ public partial class ScanUsersEvents
         var batchSize = 100;
         var maxDegree = Environment.ProcessorCount;
     
-        await DataflowPipeline.RunAsync<EventBatch, CalendarEvent, EventMatch>(
+        await DataflowScanPipeline.RunAsync<EventBatch, CalendarEvent, EventMatch>(
             async (lastId, ct) =>
             {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
@@ -83,7 +83,7 @@ public partial class ScanUsersEvents
                     }
                 }
     
-                return new DataflowPipeline.PipelineScanProcess<CalendarEvent, EventMatch>(
+                return new DataflowScanPipeline.PipelineScanProcess<CalendarEvent, EventMatch>(
                     batch.Select(x => x.Entity).ToList(),
                     matches);
             },

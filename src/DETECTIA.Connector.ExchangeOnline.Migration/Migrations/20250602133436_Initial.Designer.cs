@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 {
     [DbContext(typeof(AppDatabaseContext))]
-    [Migration("20250528114655_initial")]
-    partial class initial
+    [Migration("20250602133436_Initial")]
+    partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -217,9 +217,11 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
                     b.Property<string>("Pattern")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Pattern");
 
                     b.ToTable("Match", "DETECTIA");
 
@@ -417,6 +419,29 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.ToTable("UserGroups", "DETECTIA");
                 });
 
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroupMembership", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("GroupId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserGroupMembership", "DETECTIA");
+                });
+
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
                 {
                     b.Property<long>("Id")
@@ -564,33 +589,15 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Property<long>("UserId")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("UserMailFolderId")
-                        .HasColumnType("bigint");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("FolderId");
 
                     b.HasIndex("GraphId");
 
                     b.HasIndex("UserId");
 
-                    b.HasIndex("UserMailFolderId");
-
                     b.ToTable("UserMessages", "DETECTIA");
-                });
-
-            modelBuilder.Entity("UserUserGroup", b =>
-                {
-                    b.Property<long>("GroupsId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("UsersId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("GroupsId", "UsersId");
-
-                    b.HasIndex("UsersId");
-
-                    b.ToTable("UserUserGroup", "DETECTIA");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventMatch", b =>
@@ -598,7 +605,8 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.HasBaseType("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.Match");
 
                     b.Property<long?>("AttachmentId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("EventAttachmentId");
 
                     b.Property<long?>("EventId")
                         .HasColumnType("bigint");
@@ -615,7 +623,8 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.HasBaseType("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.Match");
 
                     b.Property<long?>("AttachmentId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("MessageAttachmentId");
 
                     b.Property<long?>("MessageId")
                         .HasColumnType("bigint");
@@ -623,12 +632,6 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.HasIndex("AttachmentId");
 
                     b.HasIndex("MessageId");
-
-                    b.ToTable("Match", "DETECTIA", t =>
-                        {
-                            t.Property("AttachmentId")
-                                .HasColumnName("MessageMatch_AttachmentId");
-                        });
 
                     b.HasDiscriminator().HasValue("MessageMatch");
                 });
@@ -692,12 +695,31 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Navigation("Message");
                 });
 
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroupMembership", b =>
+                {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroup", "Group")
+                        .WithMany("Users")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
+                        .WithMany("GroupMemberships")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>
                 {
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
                         .WithMany("MailboxFolders")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("User");
@@ -714,32 +736,21 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMessage", b =>
                 {
+                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", "Folder")
+                        .WithMany("Messages")
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", null)
-                        .WithMany("Messages")
-                        .HasForeignKey("UserMailFolderId");
+                    b.Navigation("Folder");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("UserUserGroup", b =>
-                {
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroup", null)
-                        .WithMany()
-                        .HasForeignKey("GroupsId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("UsersId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.EventMatch", b =>
@@ -791,6 +802,8 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.User", b =>
                 {
+                    b.Navigation("GroupMemberships");
+
                     b.Navigation("InvitedEvents");
 
                     b.Navigation("MailboxFolders");
@@ -798,6 +811,11 @@ namespace DETECTIA.Connector.ExchangeOnline.Migration.Migrations
                     b.Navigation("OrganizedEvents");
 
                     b.Navigation("UserMailboxSettings");
+                });
+
+            modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserGroup", b =>
+                {
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("DETECTIA.Connector.ExchangeOnline.Domain.Models.Entities.UserMailFolder", b =>

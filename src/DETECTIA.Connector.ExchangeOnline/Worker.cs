@@ -22,8 +22,7 @@ public class Worker(
             // users
             await syncUsers.SyncUsersAsync(stoppingToken);
             await syncUsers.SyncGroupsAsync(stoppingToken);
-            
-            // users mailbox
+            // // users mailbox
             await syncMailbox.SyncUsersMailboxSettingsAsync(stoppingToken);
             await syncMailbox.SyncUsersMailboxFoldersAsync(stoppingToken);
             await syncMailbox.SyncUsersMessagesAsync(stoppingToken);
@@ -37,8 +36,6 @@ public class Worker(
             await scanEvents.ScanEventsTextAsync(stoppingToken);
             await scanEvents.ScanEventAttachmentsAsync(stoppingToken);
             
-            //await messageScan.ScanEmailTextAsync(stoppingToken);
-            //await attachmentScan.ScanEmailAttachmentsAsync(stoppingToken);
             logger.LogInformation("Finished");
         }
         catch (Exception e)

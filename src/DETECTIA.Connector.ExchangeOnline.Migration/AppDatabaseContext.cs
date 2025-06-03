@@ -64,6 +64,7 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
         });
+        
         modelBuilder.Entity<User>(b =>
         {
             b.HasKey(e => e.Id);
@@ -73,7 +74,13 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
         {
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
+            
+            b.HasOne(m => m.Folder)
+             .WithMany(f => f.Messages)
+             .HasForeignKey(m => m.FolderId)
+             .OnDelete(DeleteBehavior.Restrict); // Prevents cascading
         });
+           
         modelBuilder.Entity<MessageAttachment>(b =>
         {
             b.HasKey(e => e.Id);
@@ -84,6 +91,11 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
         {
             b.HasKey(e => e.Id);
             b.Property(e => e.Id).ValueGeneratedOnAdd();
+            
+            b.HasOne(f => f.User)
+                .WithMany(u => u.MailboxFolders)
+                .HasForeignKey(f => f.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
         
         modelBuilder.Entity<UserGroup>(b =>
@@ -139,13 +151,13 @@ public class AppDatabaseContext(DbContextOptions<AppDatabaseContext> options) : 
     
     public override int SaveChanges()
     {
-        UpdateLastModified();
+       // UpdateLastModified();
         return base.SaveChanges();
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        UpdateLastModified();
+       // UpdateLastModified();
         return await base.SaveChangesAsync(cancellationToken);
     }
 

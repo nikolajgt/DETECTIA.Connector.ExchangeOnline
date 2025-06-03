@@ -25,7 +25,7 @@ public partial class ScanUsersMailbox
     {
         var batchSize = 10;
         
-        await DataflowPipeline.RunAsync<AttachmentBatch, MessageAttachment, MessageMatch>(
+        await DataflowScanPipeline.RunAsync<AttachmentBatch, MessageAttachment, MessageMatch>(
             async (lastId, ct) => {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
                 return await ctx.MessageAttachments
@@ -78,7 +78,7 @@ public partial class ScanUsersMailbox
                     }
                 }
                 logger.LogInformation("Finished scanning batch {}", batchNumber);
-                return new DataflowPipeline.PipelineScanProcess<MessageAttachment, MessageMatch>(
+                return new DataflowScanPipeline.PipelineScanProcess<MessageAttachment, MessageMatch>(
                     batch.Select(x => x.Entity).ToList(), 
                     matches);
             },
