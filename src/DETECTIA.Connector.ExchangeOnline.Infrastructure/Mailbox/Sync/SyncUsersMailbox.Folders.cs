@@ -14,6 +14,8 @@ public partial class SyncUsersMailbox
 {
     public async Task SyncUsersMailboxFoldersAsync(CancellationToken cancellationToken)
     {
+        const int dbFetchPageSize = 100;
+        const int persistBatchSize = 500;
         await DataflowSyncPipeline.RunAsync<User, UserMailFolder, User>(
             fetchPageAsync: async (lastUserId, ct) =>
             {
@@ -22,7 +24,7 @@ public partial class SyncUsersMailbox
                     .AsNoTracking()
                     .Where(u => u.Id > lastUserId)
                     .OrderBy(u => u.Id)
-                    .Take(100)
+                    .Take(dbFetchPageSize)
                     .ToListAsync(ct);
             },
             expandAsync: async (user, ct) =>
@@ -30,7 +32,10 @@ public partial class SyncUsersMailbox
                 var userFolders = new List<UserMailFolder>();
                 try
                 {
-                    var baseBuilder = graph.Users[user.UserPrincipalName].MailFolders.Delta;
+                    var baseBuilder = graph
+                        .Users[user.UserPrincipalName]
+                        .MailFolders
+                        .Delta;
                     var builder = string.IsNullOrEmpty(user.FoldersDeltaLink)
                         ? baseBuilder
                         : baseBuilder.WithUrl(user.FoldersDeltaLink);
@@ -111,7 +116,7 @@ public partial class SyncUsersMailbox
                     PropertiesToExcludeOnUpdate = [nameof(UserMailFolder.Id)],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = 500
+                    BatchSize = persistBatchSize
                 }, cancellationToken: ct);
                 
                 await dbContext.BulkInsertOrUpdateAsync(users, new BulkConfig
@@ -120,12 +125,12 @@ public partial class SyncUsersMailbox
                     PropertiesToExcludeOnUpdate = [nameof(UserMailFolder.Id)],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = 500
+                    BatchSize = persistBatchSize
                 }, cancellationToken: ct);
             },
             keySelector: u => u.Id,
-            persistBatchSize: 100, // Adjust as needed
-            maxDegreeOfParallelism: 4,
+            persistBatchSize: persistBatchSize, 
+            maxDegreeOfParallelism: Environment.ProcessorCount,
             cancellationToken: cancellationToken
         );
     }

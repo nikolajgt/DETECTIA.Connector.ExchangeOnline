@@ -11,6 +11,8 @@ public partial class SyncUsersMailbox
     public record MessageInfo(string UserPrincipalName, string GraphId, long MessageId);
     public async Task SyncUsersMessageAttachmentsAsync(CancellationToken cancellationToken)
     {
+        const int dbFetchPageSize = 100;
+        const int persistBatchSize = 500;
         await DataflowSyncPipeline.RunAsync<MessageInfo, MessageAttachment>(
             fetchPageAsync: async (lastKey, ct) =>
             {
@@ -74,7 +76,7 @@ public partial class SyncUsersMailbox
             },
             keySelector: message => message.MessageId,
             persistBatchSize: 500,
-            maxDegreeOfParallelism: 4,
+            maxDegreeOfParallelism: Environment.ProcessorCount,
             cancellationToken: cancellationToken
         );
     }

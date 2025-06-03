@@ -15,7 +15,9 @@ public partial class SyncUsersMailbox
 {
     public async Task SyncUsersMailboxSettingsAsync(CancellationToken cancellationToken)
     {
-         await DataflowSyncPipeline.RunAsync<User, UserMailboxSettings>(
+        const int dbFetchPageSize = 100;
+        const int persistBatchSize = 500;
+        await DataflowSyncPipeline.RunAsync<User, UserMailboxSettings>(
             fetchPageAsync: async (lastUserId, ct) =>
             {
                 await using var dbContext = await dbFactory.CreateDbContextAsync(ct);
@@ -23,7 +25,7 @@ public partial class SyncUsersMailbox
                     .AsNoTracking()
                     .Where(u => u.Id > lastUserId)
                     .OrderBy(u => u.Id)
-                    .Take(100)
+                    .Take(dbFetchPageSize)
                     .ToListAsync(ct);
             },
             expandAsync: async (user, ct) =>
@@ -101,12 +103,12 @@ public partial class SyncUsersMailbox
                     ],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = 500
+                    BatchSize = persistBatchSize
                 }, cancellationToken: ct);
             },
             keySelector: u => u.Id,
-            persistBatchSize: 100, // Adjust as needed
-            maxDegreeOfParallelism: 4,
+            persistBatchSize: persistBatchSize,
+            maxDegreeOfParallelism: Environment.ProcessorCount,
             cancellationToken: cancellationToken
         );
     }

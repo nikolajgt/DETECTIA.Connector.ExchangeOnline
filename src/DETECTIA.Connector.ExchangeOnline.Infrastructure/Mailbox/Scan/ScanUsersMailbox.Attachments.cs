@@ -24,7 +24,7 @@ public partial class ScanUsersMailbox
     public async Task ScanUsersMessageAttachmentsAsync(CancellationToken cancellationToken)
     {
         var batchSize = 500;
-        
+        const int persistBatchSize = 500;
         await DataflowScanPipeline.RunAsync<AttachmentBatch, MessageAttachment, MessageMatch>(
             async (lastId, ct) => {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);

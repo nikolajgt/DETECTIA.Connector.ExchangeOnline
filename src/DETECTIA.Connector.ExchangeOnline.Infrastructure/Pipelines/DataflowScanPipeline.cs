@@ -85,4 +85,147 @@ public static class DataflowScanPipeline
         scanBlock.Complete();
         await persistBlock.Completion;
     }
+    
+    
+     public static async Task RunAsync<TInput, TEntity, TMatch>(
+            Func<long, CancellationToken, Task<List<TInput>?>> fetchPageAsync,
+            Func<TInput, CancellationToken, Task<(IEnumerable<TEntity> entities, TMatch match)>> expandAsync,
+            Func<IEnumerable<TEntity>, IEnumerable<TMatch>, CancellationToken, Task> persistBatchAsync,
+            Func<TInput, long> keySelector,
+            int persistBatchSize = 500,
+            int maxDegreeOfParallelism = 5,
+            CancellationToken cancellationToken = default)
+        {
+            var inputBuffer = new BufferBlock<TInput>(new DataflowBlockOptions
+            {
+                BoundedCapacity = maxDegreeOfParallelism * 2
+            });
+    
+            var fanOutBlock = new TransformBlock<TInput, (IEnumerable<TEntity> entities, TMatch match)>(
+                async input => await expandAsync(input, cancellationToken),
+                new ExecutionDataflowBlockOptions
+                {
+                    MaxDegreeOfParallelism = maxDegreeOfParallelism,
+                    BoundedCapacity = maxDegreeOfParallelism,
+                    CancellationToken = cancellationToken,
+                    EnsureOrdered = false
+                });
+    
+            var batchBlock = new BatchBlock<(IEnumerable<TEntity> entities, TMatch match)>(persistBatchSize);
+    
+            var flattenBlock = new TransformBlock<(IEnumerable<TEntity> entities, TMatch match)[], (IEnumerable<TEntity>, IEnumerable<TMatch>)>(
+                batch =>
+                {
+                    var allEntities = batch.SelectMany(item => item.entities).ToList();
+                    var allMatches = batch.Select(item => item.match).ToList();
+                    return (allEntities, allMatches);
+                });
+    
+            var persistBlock = new ActionBlock<(IEnumerable<TEntity>, IEnumerable<TMatch>)>(
+                async tuple =>
+                {
+                    var (entities, matches) = tuple;
+                    await persistBatchAsync(entities, matches, cancellationToken);
+                },
+                new ExecutionDataflowBlockOptions
+                {
+                    MaxDegreeOfParallelism = 1,
+                    BoundedCapacity = maxDegreeOfParallelism,
+                    CancellationToken = cancellationToken
+                });
+    
+            inputBuffer.LinkTo(fanOutBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            fanOutBlock.LinkTo(batchBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            batchBlock.LinkTo(flattenBlock, new DataflowLinkOptions { PropagateCompletion = true });
+            flattenBlock.LinkTo(persistBlock, new DataflowLinkOptions { PropagateCompletion = true });
+    
+            long lastKey = 0;
+            while (true)
+            {
+                var page = await fetchPageAsync(lastKey, cancellationToken);
+                if (page == null || page.Count == 0)
+                    break;
+    
+                foreach (var item in page)
+                {
+                    await inputBuffer.SendAsync(item, cancellationToken);
+                }
+    
+                lastKey = keySelector(page.Last());
+            }
+    
+            inputBuffer.Complete();
+            await persistBlock.Completion;
+        }
+     
+      public static async Task RunAsync2<TInput, TEntity, TMatch>(
+        Func<long, CancellationToken, Task<List<TInput>?>> fetchPageAsync,
+        Func<TInput, CancellationToken, Task<(IEnumerable<TEntity> entities, TMatch match)>> expandAsync,
+        Func<IEnumerable<TEntity>, IEnumerable<TMatch>, CancellationToken, Task> persistBatchAsync,
+        Func<TInput, long> keySelector,
+        int persistBatchSize = 500,
+        int maxDegreeOfParallelism = 5,
+        CancellationToken cancellationToken = default)
+    {
+        var inputBuffer = new BufferBlock<TInput>(new DataflowBlockOptions
+        {
+            BoundedCapacity = maxDegreeOfParallelism * 2
+        });
+
+        var fanOutBlock = new TransformBlock<TInput, (IEnumerable<TEntity> entities, TMatch match)>(
+            async input => await expandAsync(input, cancellationToken),
+            new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = maxDegreeOfParallelism,
+                BoundedCapacity = maxDegreeOfParallelism,
+                CancellationToken = cancellationToken,
+                EnsureOrdered = false
+            });
+
+        var batchBlock = new BatchBlock<(IEnumerable<TEntity> entities, TMatch match)>(persistBatchSize);
+
+        var flattenBlock = new TransformBlock<(IEnumerable<TEntity> entities, TMatch match)[], (IEnumerable<TEntity>, IEnumerable<TMatch>)>(
+            batch =>
+            {
+                var allEntities = batch.SelectMany(item => item.entities).ToList();
+                var allMatches = batch.Select(item => item.match).ToList();
+                return (allEntities, allMatches);
+            });
+
+        var persistBlock = new ActionBlock<(IEnumerable<TEntity>, IEnumerable<TMatch>)>(
+            async tuple =>
+            {
+                var (entities, matches) = tuple;
+                await persistBatchAsync(entities, matches, cancellationToken);
+            },
+            new ExecutionDataflowBlockOptions
+            {
+                MaxDegreeOfParallelism = 1,
+                BoundedCapacity = maxDegreeOfParallelism,
+                CancellationToken = cancellationToken
+            });
+
+        inputBuffer.LinkTo(fanOutBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        fanOutBlock.LinkTo(batchBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        batchBlock.LinkTo(flattenBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        flattenBlock.LinkTo(persistBlock, new DataflowLinkOptions { PropagateCompletion = true });
+
+        long lastKey = 0;
+        while (true)
+        {
+            var page = await fetchPageAsync(lastKey, cancellationToken);
+            if (page == null || page.Count == 0)
+                break;
+
+            foreach (var item in page)
+            {
+                await inputBuffer.SendAsync(item, cancellationToken);
+            }
+
+            lastKey = keySelector(page.Last());
+        }
+
+        inputBuffer.Complete();
+        await persistBlock.Completion;
+    }
 }

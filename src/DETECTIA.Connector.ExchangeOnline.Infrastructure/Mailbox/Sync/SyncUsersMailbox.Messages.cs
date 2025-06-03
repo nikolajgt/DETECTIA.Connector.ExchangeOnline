@@ -13,18 +13,18 @@ public partial class SyncUsersMailbox
 {
     public async Task SyncUsersMessagesAsync(CancellationToken cancellationToken)
     {
-
+        const int dbFetchPageSize = 100;
+        const int persistBatchSize = 500;
         await DataflowSyncPipeline.RunAsync<UserMailFolder, UserMessage, UserMailFolder>(
             fetchPageAsync: async (lastFolderId, ct) =>
             {
                 await using var dbContext = await dbFactory.CreateDbContextAsync(ct);
-
                 return await dbContext.UserMailFolders
                     .AsNoTracking()
                     .Include(f => f.User)
                     .Where(f => f.Id > lastFolderId)
                     .OrderBy(f => f.Id)
-                    .Take(100)
+                    .Take(dbFetchPageSize)
                     .ToListAsync(ct);
             },
             expandAsync: async (folder, ct) =>
@@ -109,7 +109,7 @@ public partial class SyncUsersMailbox
                     PropertiesToExcludeOnUpdate = [ nameof(UserMessage.Id), nameof(UserMessage.GraphId) ],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = 500
+                    BatchSize = persistBatchSize
                 }, cancellationToken: ct);
                 
                 await ctx.BulkInsertOrUpdateAsync(folder, new BulkConfig
@@ -118,12 +118,12 @@ public partial class SyncUsersMailbox
                     PropertiesToInclude = [ nameof(UserMailFolder.MessagesDeltaLink)],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = 500
+                    BatchSize = persistBatchSize
                 }, cancellationToken: ct);
             },
             keySelector: f => f.Id,
-            persistBatchSize: 500,
-            maxDegreeOfParallelism: 4,
+            persistBatchSize: persistBatchSize,
+            maxDegreeOfParallelism: Environment.ProcessorCount,
             cancellationToken: cancellationToken
         );
     }

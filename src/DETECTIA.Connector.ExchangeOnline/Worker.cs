@@ -14,21 +14,34 @@ public class Worker(
     ScanUsersMailbox scanMailbox,
     ScanUsersEvents scanEvents) : BackgroundService
 {
-
+    // SyncUsersAsync
+    // ├── SyncGroupsAsync
+    // │    └── SyncGroupMembersAsync !NotImplemented
+    // ├── SyncUsersMailboxSettingsAsync
+    // ├── SyncUsersMailboxFoldersAsync
+    // │   └── SyncUsersMessagesAsync
+    // │       ├── SyncUsersMessageAttachmentsAsync
+    // │       │   └── ScanUsersMessageAttachmentsAsync
+    // │       └── ScanUsersMessageTextAsync
+    // └── SyncUsersEventsAsync
+    //     ├── SyncCalendarEventAttachmentsAsync
+    //     │   └── ScanEventAttachmentsAsync
+    //     ├── ScanEventsTextAsync
+    //     └── SyncEventParticipantsAsync !NotImplemented
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
             // users
-            // await syncUsers.SyncUsersAsync(stoppingToken);
-            // await syncUsers.SyncGroupsAsync(stoppingToken);
+             await syncUsers.SyncUsersAsync(stoppingToken);
+             await syncUsers.SyncGroupsAsync(stoppingToken);
             // users mailbox
-            // await syncMailbox.SyncUsersMailboxSettingsAsync(stoppingToken);
-            // await syncMailbox.SyncUsersMailboxFoldersAsync(stoppingToken);
-            // await syncMailbox.SyncUsersMessagesAsync(stoppingToken);
-            // await syncMailbox.SyncUsersMessageAttachmentsAsync(stoppingToken);
-            // await scanMailbox.ScanUsersMessageTextAsync(stoppingToken);
-            // await scanMailbox.ScanUsersMessageAttachmentsAsync(stoppingToken);
+            await syncMailbox.SyncUsersMailboxSettingsAsync(stoppingToken);
+            await syncMailbox.SyncUsersMailboxFoldersAsync(stoppingToken);
+            await syncMailbox.SyncUsersMessagesAsync(stoppingToken);
+            await syncMailbox.SyncUsersMessageAttachmentsAsync(stoppingToken);
+            await scanMailbox.ScanUsersMessageTextAsync(stoppingToken);
+            await scanMailbox.ScanUsersMessageAttachmentsAsync(stoppingToken);
             
             // users calendar events
             await syncEvents.SyncUsersEventsAsync(stoppingToken);

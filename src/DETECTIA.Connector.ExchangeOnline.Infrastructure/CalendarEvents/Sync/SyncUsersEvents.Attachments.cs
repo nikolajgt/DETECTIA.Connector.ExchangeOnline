@@ -12,6 +12,8 @@ public partial class SyncUsersEvents
 {
     public async Task SyncCalendarEventAttachmentsAsync(CancellationToken cancellationToken)
     {
+        const int dbFetchPageSize = 100;
+        const int persistBatchSize = 500;
         await DataflowSyncPipeline.RunAsync<CalendarEvent, EventAttachment>(
             fetchPageAsync: async (lastKey, ct) =>
             {
@@ -23,7 +25,7 @@ public partial class SyncUsersEvents
                     .Where(e => !string.IsNullOrEmpty(e.GraphId))
                     .Include(e => e.Organizer)
                     .OrderBy(e => e.Id)
-                    .Take(100)
+                    .Take(dbFetchPageSize)
                     .ToListAsync(ct);
             },
             expandAsync: async (ev, ct) =>
@@ -67,12 +69,12 @@ public partial class SyncUsersEvents
                     PropertiesToExcludeOnUpdate = [nameof(EventAttachment.Id)],
                     SetOutputIdentity = false,
                     PreserveInsertOrder = false,
-                    BatchSize = 500
+                    BatchSize = persistBatchSize
                 }, cancellationToken: ct);
             },
             keySelector: e => e.Id,
-            persistBatchSize: 100,
-            maxDegreeOfParallelism: 4,
+            persistBatchSize: persistBatchSize,
+            maxDegreeOfParallelism: Environment.ProcessorCount,
             cancellationToken: cancellationToken
         );
     }
