@@ -10,20 +10,14 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.CalendarEvents.Scan;
 
 public partial class ScanUsersEvents
 {
-    private record EventBatch
-    {
-        internal int BatchNumber { get; init; }
-        internal int TotalBatchCount { get; init; }
-        internal required CalendarEvent Entity { get; init; }
-        internal required string UserPrincipalName { get; init; }
-    }
+    private record EventProcess(CalendarEvent Event, string UserPrincipalName);
     
     public async Task ScanEventsTextAsync(CancellationToken cancellationToken)
     {
         var batchSize = 100;
         var maxDegree = Environment.ProcessorCount;
     
-        await DataflowScanPipeline.RunAsync<EventBatch, CalendarEvent, EventMatch>(
+        await DataflowScanPipeline.RunAsync<EventProcess, CalendarEvent, EventMatch>(
             async (lastId, ct) =>
             {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
@@ -32,79 +26,69 @@ public partial class ScanUsersEvents
                     .Where(m => !m.HasBeenScanned && m.Id > lastId)
                     .OrderBy(m => m.Id)
                     .Include(m => m.Organizer)
-                    .Select(e => new EventBatch
-                    {
-                        Entity            = e,
-                        UserPrincipalName= e.Organizer!.UserPrincipalName!
-                    })
+                    .Select(e => new EventProcess(e, e.Organizer!.UserPrincipalName!))
                     .Take(batchSize)
                     .ToListAsync(ct);
             },
     
-            async (batch, ct) =>
+            async (eventProcess, ct) =>
             {
                 var matches = new List<EventMatch>();
-                foreach (var item in batch)
+                try
                 {
-                    try
-                    {
-                        var graphMsg = await graph
-                            .Users[item.UserPrincipalName]
-                            .Messages[item.Entity.GraphId]
-                            .GetAsync(cfg => 
+                    var graphMsg = await graph
+                        .Users[eventProcess.UserPrincipalName]
+                        .Events[eventProcess.Event.GraphId]
+                        .GetAsync(cfg => 
                                 cfg.QueryParameters.Select = ["subject", "body"],
-                                ct
-                            );
-    
-                        var body = graphMsg?.Body?.Content ?? string.Empty;
-                        if(string.IsNullOrWhiteSpace(body)) continue;
-                        var resp = await contentSearch.MatchAsync(body);
-                        var convertedMatches = resp.Response.Matches.GroupBy(obj => new { obj.Name, obj.Pattern })
-                            .Select(group => new EventMatch
-                            {
-                                Name = group.Key.Name,
-                                Pattern = group.Key.Pattern,
-                                MatchCount = group.Count(),
-                                EventId  = item.Entity.Id
-                            }).ToList();
-                        matches.AddRange(convertedMatches);
-                        item.Entity.IsSensitive = resp.Response.IsSensitive;
-                        item.Entity.ScannedAt = DateTimeOffset.UtcNow;
-                    }
-                    catch (ODataError ex)
-                    {
-                        logger.LogWarning(
-                            "Skipping scan for {User}/{Msg}: {Error}",
-                            item.UserPrincipalName, item.Entity.GraphId, ex.Message
+                            ct
                         );
-                    }
+    
+                    var body = graphMsg?.Body?.Content ?? string.Empty;
+                    var resp = await contentSearch.MatchAsync(body);
+                    var convertedMatches = resp.Response.Matches.GroupBy(obj => new { obj.Name, obj.Pattern })
+                        .Select(group => new EventMatch
+                        {
+                            Name = group.Key.Name,
+                            Pattern = group.Key.Pattern,
+                            MatchCount = group.Count(),
+                            EventId  = eventProcess.Event.Id
+                        }).ToList();
+                    matches.AddRange(convertedMatches);
+                    eventProcess.Event.IsSensitive = resp.Response.IsSensitive;
+                    eventProcess.Event.ScannedAt = DateTimeOffset.UtcNow;
+                }
+                catch (ODataError ex)
+                {
+                    logger.LogWarning(
+                        "Skipping scan for {User}/{Event}: {Error}",
+                        eventProcess.UserPrincipalName, eventProcess.Event.GraphId, ex.Message
+                    );
                 }
     
-                return new DataflowScanPipeline.PipelineScanProcess<CalendarEvent, EventMatch>(
-                    batch.Select(x => x.Entity).ToList(),
-                    matches);
+                return (eventProcess.Event, matches);
             },
     
-            async (messages, ct) =>
+            async (messages, matches, ct) =>
             {
                 await using var db = await dbFactory.CreateDbContextAsync(ct);
-                if (messages.Entities.Any())
+                if (messages.Any())
                 {
-                    await db.BulkUpdateAsync(messages.Entities, new BulkConfig
+                    await db.BulkUpdateAsync(messages, new BulkConfig
                     {
-                        UpdateByProperties          = [nameof(UserMessage.Id)] ,
+                        UpdateByProperties          = [nameof(CalendarEvent.Id)] ,
                         PropertiesToIncludeOnUpdate =
                         [
-                            nameof(UserMessage.HasBeenScanned),
-                            nameof(UserMessage.IsSensitive),
-                            nameof(UserMessage.ScannedAt)
+                            nameof(CalendarEvent.HasBeenScanned),
+                            nameof(CalendarEvent.IsSensitive),
+                            nameof(CalendarEvent.ScannedAt)
                         ],
                         BatchSize = batchSize
                     }, cancellationToken: ct);
                 }
-                if (messages.Matches.Any())
+                if (matches.Any())
                 {
-                    await db.BulkInsertOrUpdateAsync(messages.Matches, new BulkConfig
+                    await db.BulkInsertOrUpdateAsync(matches, new BulkConfig
                     {
                         UpdateByProperties          = [nameof(EventMatch.EventId), nameof(EventMatch.AttachmentId), nameof(EventMatch.Pattern)],
                         PropertiesToExcludeOnUpdate = [
@@ -115,10 +99,9 @@ public partial class ScanUsersEvents
                 }
             },
     
-            msg => msg.Entity.Id,
-    
-            groupBatches:         1,                       
-            maxDegreeOfParall: maxDegree,
+            msg => msg.Event.Id,
+            persistBatchSize: 500,                       
+            maxDegreeOfParallelism: maxDegree,
             cancellationToken: cancellationToken
         );
     }

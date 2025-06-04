@@ -33,7 +33,11 @@ public partial class SyncUsersEvents
             {
                 try
                 {
-                    var builder = graph.Users[user.UserPrincipalName].CalendarView.Delta;
+                    var builder = graph
+                        .Users[user.UserPrincipalName]
+                        .CalendarView
+                        .Delta;
+                    
                     if (!string.IsNullOrEmpty(user.EventsDeltaLink))
                         builder = builder.WithUrl(user.EventsDeltaLink);
 

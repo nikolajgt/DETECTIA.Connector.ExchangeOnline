@@ -10,21 +10,15 @@ namespace DETECTIA.Connector.ExchangeOnline.Infrastructure.Mailbox.Scan;
 
 public partial class ScanUsersMailbox
 {
-     private record MessageBatch
-    {
-        internal int BatchNumber { get; init; }
-        internal int TotalBatchCount { get; init; }
-        internal required UserMessage Entity { get; init; }
-        internal required string UserPrincipalName { get; init; }
-    }
+    private sealed record MessageProcess(UserMessage Message, string UserPrincipalName);
     
     public async Task ScanUsersMessageTextAsync(CancellationToken cancellationToken)
     {
-        var batchSize = 100;
+        const int dbFetchPageSize = 100;
+        const int persistBatchSize = 500;
         var maxDegree = Environment.ProcessorCount;
     
-        await DataflowScanPipeline.RunAsync<MessageBatch, UserMessage, MessageMatch>(
-            // ---- A) fetchPageAsync ----
+        await DataflowScanPipeline.RunAsync<MessageProcess, UserMessage, MessageMatch>(
             async (lastId, ct) =>
             {
                 await using var ctx = await dbFactory.CreateDbContextAsync(ct);
@@ -33,65 +27,53 @@ public partial class ScanUsersMailbox
                     .Where(m => !m.HasBeenScanned && m.Id > lastId)
                     .OrderBy(m => m.Id)
                     .Include(m => m.User)
-                    .Select(m => new MessageBatch
-                    {
-                        Entity            = m,
-                        UserPrincipalName= m.User!.UserPrincipalName!
-                    })
-                    .Take(batchSize)
+                    .Select(m => new MessageProcess(m, m!.User!.UserPrincipalName!))
+                    .Take(dbFetchPageSize)
                     .ToListAsync(ct);
             },
-    
-            async (batch, ct) =>
+            async (item, ct) =>
             {
                 var matches = new List<MessageMatch>();
-                foreach (var item in batch)
+                try
                 {
-                    try
-                    {
-                        var graphMsg = await graph
-                            .Users[item.UserPrincipalName]
-                            .Messages[item.Entity.GraphId]
-                            .GetAsync(cfg => 
+                    var graphMsg = await graph
+                        .Users[item.UserPrincipalName]
+                        .Messages[item.Message.GraphId]
+                        .GetAsync(cfg => 
                                 cfg.QueryParameters.Select = ["subject", "body"],
-                                ct
-                            );
-    
-                        var body = graphMsg?.Body?.Content ?? string.Empty;
-                        if(string.IsNullOrWhiteSpace(body)) continue;
-                        var resp = await contentSearch.MatchAsync(body);
-                        var convertedMatches = resp.Response.Matches.GroupBy(obj => new { obj.Name, obj.Pattern })
-                            .Select(group => new MessageMatch
-                            {
-                                Name = group.Key.Name,
-                                Pattern = group.Key.Pattern,
-                                MatchCount = group.Count(),
-                                MessageId = item.Entity.Id
-                            }).ToList();
-                        matches.AddRange(convertedMatches);
-                        item.Entity.IsSensitive = resp.Response.IsSensitive;
-                        item.Entity.ScannedAt = DateTimeOffset.UtcNow;
-                    }
-                    catch (ODataError ex)
-                    {
-                        logger.LogWarning(
-                            "Skipping scan for {User}/{Msg}: {Error}",
-                            item.UserPrincipalName, item.Entity.GraphId, ex.Message
+                            ct
                         );
-                    }
+    
+                    var body = graphMsg?.Body?.Content ?? string.Empty;
+                    var resp = await contentSearch.MatchAsync(body);
+                    var convertedMatches = resp.Response.Matches.GroupBy(obj => new { obj.Name, obj.Pattern })
+                        .Select(group => new MessageMatch
+                        {
+                            Name = group.Key.Name,
+                            Pattern = group.Key.Pattern,
+                            MatchCount = group.Count(),
+                            MessageId = item.Message.Id
+                        }).ToList();
+                    matches.AddRange(convertedMatches);
+                    item.Message.IsSensitive = resp.Response.IsSensitive;
+                    item.Message.ScannedAt = DateTimeOffset.UtcNow;
+                }
+                catch (ODataError ex)
+                {
+                    logger.LogWarning(
+                        "Skipping scan for {User}/{Msg}: {Error}",
+                        item.UserPrincipalName, item.Message.GraphId, ex.Message
+                    );
                 }
 
-                return new DataflowScanPipeline.PipelineScanProcess<UserMessage, MessageMatch>(
-                    batch.Select(x => x.Entity).ToList(), 
-                    matches);
+                return (item.Message, matches);
             },
-    
-            async (messages, ct) =>
+            async (messages, matches, ct) =>
             {
                 await using var db = await dbFactory.CreateDbContextAsync(ct);
-                if (messages.Entities.Any())
+                if (messages.Any())
                 {
-                    await db.BulkUpdateAsync(messages.Entities, new BulkConfig
+                    await db.BulkUpdateAsync(messages, new BulkConfig
                     {
                         UpdateByProperties          = [nameof(UserMessage.Id)] ,
                         PropertiesToIncludeOnUpdate =
@@ -100,26 +82,25 @@ public partial class ScanUsersMailbox
                             nameof(UserMessage.IsSensitive),
                             nameof(UserMessage.ScannedAt)
                         ],
-                        BatchSize = batchSize
+                        BatchSize = persistBatchSize
                     }, cancellationToken: ct);
                 }
-                if (messages.Matches.Any())
+                if (matches.Any())
                 {
-                    await db.BulkInsertOrUpdateAsync(messages.Matches, new BulkConfig
+                    await db.BulkInsertOrUpdateAsync(matches, new BulkConfig
                     {
                         UpdateByProperties          = [nameof(MessageMatch.MessageId), nameof(MessageMatch.Pattern)],
                         PropertiesToExcludeOnUpdate = [
                             nameof(MessageMatch.AttachmentId)
                         ],
-                        BatchSize = batchSize
+                        BatchSize = persistBatchSize
                     }, cancellationToken: ct);
                 }
             },
     
-            msg => msg.Entity.Id,
-    
-            groupBatches:         1,                       
-            maxDegreeOfParall: maxDegree,
+            msg => msg.Message.Id,
+            persistBatchSize: persistBatchSize,                       
+            maxDegreeOfParallelism: maxDegree,
             cancellationToken: cancellationToken
         );
     }

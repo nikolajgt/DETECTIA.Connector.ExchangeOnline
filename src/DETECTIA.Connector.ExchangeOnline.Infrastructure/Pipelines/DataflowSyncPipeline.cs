@@ -100,15 +100,20 @@ public static class DataflowSyncPipeline
                 EnsureOrdered = false
             });
 
-        var batchBlock = new BatchBlock<(IEnumerable<TEntity1> folders, TEntity2 user)>(persistBatchSize);
 
-        var flattenBlock = new TransformBlock<(IEnumerable<TEntity1> folders, TEntity2 user)[], (IEnumerable<TEntity1>, IEnumerable<TEntity2>)>(
+        var flattenBlock = new TransformManyBlock<(IEnumerable<TEntity1> folders, TEntity2 user), (TEntity1 folder, TEntity2 user)>(
+            tuple => tuple.folders.Select(f => (f, tuple.user)));
+
+        var batchBlock = new BatchBlock<(TEntity1 folder, TEntity2 user)>(persistBatchSize);
+
+        var regroupBlock = new TransformBlock<(TEntity1 folder, TEntity2 user)[], (IEnumerable<TEntity1>, IEnumerable<TEntity2>)>(
             batch =>
             {
-                var allFolders = batch.SelectMany(item => item.folders).ToList();
-                var allUsers = batch.Select(item => item.user).ToList();
-                return (allFolders, allUsers);
+                var folders = batch.Select(b => b.folder).ToList();
+                var users = batch.Select(b => b.user).Distinct().ToList(); // de-dup if needed
+                return (folders, users);
             });
+
 
         var persistBlock = new ActionBlock<(IEnumerable<TEntity1>, IEnumerable<TEntity2>)>(
             async tuple =>
@@ -125,9 +130,10 @@ public static class DataflowSyncPipeline
 
         // Link blocks
         inputBuffer.LinkTo(fanOutBlock, new DataflowLinkOptions { PropagateCompletion = true });
-        fanOutBlock.LinkTo(batchBlock, new DataflowLinkOptions { PropagateCompletion = true });
-        batchBlock.LinkTo(flattenBlock, new DataflowLinkOptions { PropagateCompletion = true });
-        flattenBlock.LinkTo(persistBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        fanOutBlock.LinkTo(flattenBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        flattenBlock.LinkTo(batchBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        batchBlock.LinkTo(regroupBlock, new DataflowLinkOptions { PropagateCompletion = true });
+        regroupBlock.LinkTo(persistBlock, new DataflowLinkOptions { PropagateCompletion = true });
 
         // Feed input
         long lastKey = 0;
